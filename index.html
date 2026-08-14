@@ -171,6 +171,48 @@ tr:hover td{background:var(--panel-2);}
 }
 .toast.show{opacity:1;transform:translateY(0);}
 .loading{color:var(--text-dim);padding:30px;text-align:center;font-size:13px;}
+
+/* photo upload fields */
+.photo-input-wrap{
+  display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:4px;padding:8px 10px;
+}
+.photo-input-wrap input[type=file]{
+  color:var(--text-dim);font-size:12px;width:100%;
+}
+.photo-preview{
+  width:44px;height:44px;border-radius:4px;object-fit:cover;border:1px solid var(--line);flex-shrink:0;display:none;
+}
+.photo-preview.show{display:block;}
+
+/* gallery / photo cards */
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
+.photo-card{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+.photo-card .photo-row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);}
+.photo-card .photo-col{position:relative;background:var(--panel-2);}
+.photo-card .photo-col img{width:100%;height:120px;object-fit:cover;display:block;cursor:zoom-in;}
+.photo-card .photo-col img:hover{opacity:.85;}
+.photo-card .photo-col .no-photo{
+  height:120px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);
+  font-size:10.5px;text-align:center;padding:6px;
+}
+.photo-card .photo-col .cap{
+  position:absolute;top:0;left:0;background:rgba(18,22,26,.75);color:var(--amber);
+  font-family:'IBM Plex Mono',monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;
+  padding:2px 6px;
+}
+.photo-card .info{padding:10px;}
+.photo-card .info .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:4px;}
+.photo-card .info .desc{font-size:12.5px;color:var(--text);line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+
+/* lightbox */
+.lightbox{
+  position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;
+  z-index:999;padding:36px;cursor:zoom-out;
+}
+.lightbox.show{display:flex;}
+.lightbox img{max-width:100%;max-height:100%;border-radius:6px;box-shadow:0 10px 40px rgba(0,0,0,.6);}
 </style>
 </head>
 <body>
@@ -191,6 +233,7 @@ tr:hover td{background:var(--panel-2);}
   <nav class="tabs">
     <button class="tab-btn active" data-tab="ringkasan">Ringkasan Mingguan</button>
     <button class="tab-btn" data-tab="input">Input Harian</button>
+    <button class="tab-btn" data-tab="galeri">Galeri Foto</button>
     <button class="tab-btn" data-tab="data">Data Lengkap</button>
     <button class="tab-btn" data-tab="master">Master Data</button>
   </nav>
@@ -209,6 +252,10 @@ tr:hover td{background:var(--panel-2);}
     <div class="panel">
       <h2>Jenis Problem Paling Sering</h2>
       <div class="barlist" id="barProblem"></div>
+    </div>
+    <div class="panel">
+      <h2>Problem Terbaru Dengan Foto</h2>
+      <div class="gallery-grid" id="recentPhotos"></div>
     </div>
   </section>
 
@@ -256,6 +303,22 @@ tr:hover td{background:var(--panel-2);}
           <label>Detail / Deskripsi Problem</label>
           <textarea id="f-desc" placeholder="Jelaskan problem yang terjadi secara lengkap..." required></textarea>
         </div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Foto Problem</label>
+            <div class="photo-input-wrap">
+              <input type="file" id="f-photo-problem" accept="image/*">
+              <img class="photo-preview" id="preview-problem">
+            </div>
+          </div>
+          <div class="field">
+            <label>Foto NC (Non Conformance)</label>
+            <div class="photo-input-wrap">
+              <input type="file" id="f-photo-nc" accept="image/*">
+              <img class="photo-preview" id="preview-nc">
+            </div>
+          </div>
+        </div>
         <button type="submit" class="btn">Simpan Problem</button>
         <span id="saveMsg" style="margin-left:10px;color:var(--green);font-size:12.5px;"></span>
       </form>
@@ -264,6 +327,14 @@ tr:hover td{background:var(--panel-2);}
     <div class="panel">
       <h2>Entri Hari Ini <span class="n" id="todayCount"></span></h2>
       <div id="todayList"><div class="empty">Belum ada entri.</div></div>
+    </div>
+  </section>
+
+  <!-- GALERI FOTO -->
+  <section id="tab-galeri" class="hidden">
+    <div class="panel">
+      <h2>Galeri Foto Problem &amp; NC</h2>
+      <div class="gallery-grid" id="galleryGrid"></div>
     </div>
   </section>
 
@@ -325,6 +396,7 @@ tr:hover td{background:var(--panel-2);}
 </main>
 
 <div class="toast" id="toast"></div>
+<div class="lightbox" id="lightbox"><img id="lightboxImg" src="" alt="Foto diperbesar"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
@@ -375,7 +447,8 @@ function rowToEntry(r){
   return {
     id: r.id, date: r.date, shift: r.shift||'', machine: r.machine||'',
     operator: r.operator||'', qc: r.qc||'', problemType: r.problem_type||'',
-    downtime: r.downtime||'', desc: r.description||''
+    downtime: r.downtime||'', desc: r.description||'',
+    photoProblem: r.photo_problem_url||'', photoNc: r.photo_nc_url||''
   };
 }
 
@@ -438,6 +511,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.querySelectorAll('main > section').forEach(s=>s.classList.add('hidden'));
     document.getElementById('tab-'+btn.dataset.tab).classList.remove('hidden');
     if(btn.dataset.tab==='data') renderDataTable();
+    if(btn.dataset.tab==='galeri') renderGallery();
   });
 });
 
@@ -485,6 +559,12 @@ document.getElementById('f-date').value = fmt(new Date());
 
 document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
+  if(!ensureConfigured()) return;
+  const submitBtn = ev.target.querySelector('button[type=submit]');
+  const msg = document.getElementById('saveMsg');
+  const fileProblem = document.getElementById('f-photo-problem').files[0];
+  const fileNc = document.getElementById('f-photo-nc').files[0];
+
   const entry = {
     id: uid(),
     date: document.getElementById('f-date').value,
@@ -494,26 +574,49 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
     qc: document.getElementById('f-qc').value,
     problemType: document.getElementById('f-problemtype').value,
     downtime: document.getElementById('f-downtime').value || '',
-    desc: document.getElementById('f-desc').value.trim()
+    desc: document.getElementById('f-desc').value.trim(),
+    photoProblem: '',
+    photoNc: ''
   };
   if(!entry.machine || !entry.operator || !entry.qc || !entry.problemType || !entry.desc){
     showToast('Lengkapi semua field wajib'); return;
   }
-  if(!ensureConfigured()) return;
+
+  submitBtn.disabled = true;
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = 'Mengunggah foto & menyimpan...';
+  try{
+    if(fileProblem) entry.photoProblem = await uploadPhoto(fileProblem, entry.id+'-problem');
+    if(fileNc) entry.photoNc = await uploadPhoto(fileNc, entry.id+'-nc');
+  }catch(err){
+    submitBtn.disabled = false;
+    msg.textContent = '';
+    showToast('Gagal upload foto: '+err.message);
+    return;
+  }
+
   const { error } = await sb.from('problem_entries').insert({
     id: entry.id, date: entry.date, shift: entry.shift, machine: entry.machine,
     operator: entry.operator, qc: entry.qc, problem_type: entry.problemType,
-    downtime: entry.downtime, description: entry.desc
+    downtime: entry.downtime, description: entry.desc,
+    photo_problem_url: entry.photoProblem, photo_nc_url: entry.photoNc
   });
-  if(error){ showToast('Gagal menyimpan: '+error.message); return; }
+  submitBtn.disabled = false;
+  if(error){ msg.textContent=''; showToast('Gagal menyimpan: '+error.message); return; }
+
   entries.push(entry);
   document.getElementById('f-desc').value='';
   document.getElementById('f-downtime').value='';
-  const msg = document.getElementById('saveMsg');
+  document.getElementById('f-photo-problem').value='';
+  document.getElementById('f-photo-nc').value='';
+  document.getElementById('preview-problem').classList.remove('show');
+  document.getElementById('preview-nc').classList.remove('show');
+  msg.style.color = 'var(--green)';
   msg.textContent = 'Tersimpan ✓';
   setTimeout(()=>msg.textContent='', 1800);
   renderTodayList();
   renderAll();
+  renderGallery();
 });
 
 function renderTodayList(){
@@ -535,10 +638,12 @@ function renderTodayList(){
   box.querySelectorAll('[data-del]').forEach(b=>{
     b.addEventListener('click', async ()=>{
       if(!ensureConfigured()) return;
+      const target = entries.find(x=>x.id===b.dataset.del);
       const { error } = await sb.from('problem_entries').delete().eq('id', b.dataset.del);
       if(error){ showToast('Gagal menghapus: '+error.message); return; }
+      await deletePhotosForEntry(target);
       entries = entries.filter(x=>x.id!==b.dataset.del);
-      renderTodayList(); renderAll(); renderDataTable();
+      renderTodayList(); renderAll(); renderDataTable(); renderGallery();
     });
   });
 }
@@ -546,6 +651,91 @@ document.getElementById('f-date').addEventListener('change', renderTodayList);
 
 function esc(s){
   const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML;
+}
+
+/* ---------- UPLOAD FOTO ---------- */
+async function uploadPhoto(file, pathPrefix){
+  const ext = (file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
+  const path = `${pathPrefix}.${ext}`;
+  const { error } = await sb.storage.from('problem-photos').upload(path, file, { upsert: true });
+  if(error) throw error;
+  const { data } = sb.storage.from('problem-photos').getPublicUrl(path);
+  return data.publicUrl;
+}
+function pathFromPublicUrl(url){
+  if(!url) return null;
+  const marker = '/problem-photos/';
+  const idx = url.indexOf(marker);
+  if(idx===-1) return null;
+  return decodeURIComponent(url.slice(idx+marker.length));
+}
+async function deletePhotosForEntry(entry){
+  if(!sb || !entry) return;
+  const files = [pathFromPublicUrl(entry.photoProblem), pathFromPublicUrl(entry.photoNc)].filter(Boolean);
+  if(files.length){
+    try{ await sb.storage.from('problem-photos').remove(files); }catch(e){ console.error('Gagal hapus file foto:', e); }
+  }
+}
+function bindPhotoPreview(inputId, previewId){
+  const input = document.getElementById(inputId);
+  const preview = document.getElementById(previewId);
+  input.addEventListener('change', ()=>{
+    const file = input.files[0];
+    if(!file){ preview.classList.remove('show'); preview.src=''; return; }
+    preview.src = URL.createObjectURL(file);
+    preview.classList.add('show');
+  });
+}
+bindPhotoPreview('f-photo-problem','preview-problem');
+bindPhotoPreview('f-photo-nc','preview-nc');
+
+/* ---------- LIGHTBOX ---------- */
+function openLightbox(url){
+  if(!url) return;
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').classList.add('show');
+}
+document.getElementById('lightbox').addEventListener('click', ()=>{
+  document.getElementById('lightbox').classList.remove('show');
+  document.getElementById('lightboxImg').src = '';
+});
+
+/* ---------- KARTU FOTO (dipakai di Ringkasan & Galeri) ---------- */
+function photoCardHtml(e){
+  const col = (url, label) => url
+    ? `<div class="photo-col"><span class="cap">${label}</span><img src="${esc(url)}" data-lightbox="${esc(url)}" alt="${label}"></div>`
+    : `<div class="photo-col"><span class="cap">${label}</span><div class="no-photo">Tidak ada foto</div></div>`;
+  return `<div class="photo-card">
+    <div class="photo-row">
+      ${col(e.photoProblem,'Problem')}
+      ${col(e.photoNc,'NC')}
+    </div>
+    <div class="info">
+      <div class="meta">${esc(e.date)} · <span class="mtag">${esc(e.machine)}</span></div>
+      <div class="desc">${esc(e.problemType)} — ${esc(e.desc)}</div>
+    </div>
+  </div>`;
+}
+function bindLightboxTriggers(container){
+  container.querySelectorAll('[data-lightbox]').forEach(img=>{
+    img.addEventListener('click', ()=> openLightbox(img.dataset.lightbox));
+  });
+}
+function renderRecentPhotos(){
+  const box = document.getElementById('recentPhotos');
+  const wk = weekEntries().filter(e=>e.photoProblem||e.photoNc)
+    .slice().sort((a,b)=> b.date.localeCompare(a.date)).slice(0,6);
+  if(wk.length===0){ box.innerHTML = '<div class="empty">Belum ada foto problem minggu ini.</div>'; return; }
+  box.innerHTML = wk.map(photoCardHtml).join('');
+  bindLightboxTriggers(box);
+}
+function renderGallery(){
+  const grid = document.getElementById('galleryGrid');
+  const withPhotos = entries.filter(e=>e.photoProblem||e.photoNc)
+    .slice().sort((a,b)=> b.date.localeCompare(a.date));
+  if(withPhotos.length===0){ grid.innerHTML = '<div class="empty">Belum ada problem dengan foto.</div>'; return; }
+  grid.innerHTML = withPhotos.map(photoCardHtml).join('');
+  bindLightboxTriggers(grid);
 }
 
 /* ---------- RINGKASAN (WEEKLY SUMMARY) ---------- */
@@ -588,6 +778,7 @@ function renderRingkasan(){
 
   renderBarList('barMachine', byMachine);
   renderBarList('barProblem', byProblem.slice(0,8));
+  renderRecentPhotos();
 }
 
 function renderBarList(elId, pairs){
@@ -637,10 +828,12 @@ function renderDataTable(){
   tbody.querySelectorAll('[data-del2]').forEach(b=>{
     b.addEventListener('click', async ()=>{
       if(!ensureConfigured()) return;
+      const target = entries.find(x=>x.id===b.dataset.del2);
       const { error } = await sb.from('problem_entries').delete().eq('id', b.dataset.del2);
       if(error){ showToast('Gagal menghapus: '+error.message); return; }
+      await deletePhotosForEntry(target);
       entries = entries.filter(x=>x.id!==b.dataset.del2);
-      renderDataTable(); renderAll(); renderTodayList();
+      renderDataTable(); renderAll(); renderTodayList(); renderGallery();
     });
   });
 }
@@ -714,6 +907,7 @@ async function init(){
   renderMasterLists();
   renderTodayList();
   renderAll();
+  renderGallery();
 }
 init();
 </script>
