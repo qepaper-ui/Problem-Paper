@@ -350,6 +350,7 @@ tr:hover td{background:var(--panel-2);}
         <select id="filt-qc"><option value="">Semua QC</option></select>
         <button class="btn ghost small" id="clearFilters">Reset Filter</button>
         <button class="btn small" id="exportCsv" style="margin-left:auto;">Ekspor CSV</button>
+        <button class="btn small" id="exportExcel">Ekspor Excel</button>
       </div>
       <div style="overflow-x:auto;">
         <table id="dataTable">
@@ -399,6 +400,7 @@ tr:hover td{background:var(--panel-2);}
 <div class="lightbox" id="lightbox"><img id="lightboxImg" src="" alt="Foto diperbesar"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script>
 /* ============ KONFIGURASI SUPABASE ============
    Ganti 2 nilai di bawah ini dengan milik project Supabase Anda:
@@ -794,19 +796,23 @@ function renderBarList(elId, pairs){
 }
 
 /* ---------- DATA LENGKAP ---------- */
-function renderDataTable(){
+function getFilteredEntries(){
   const from = document.getElementById('filt-from').value;
   const to = document.getElementById('filt-to').value;
   const fm = document.getElementById('filt-machine').value;
   const fo = document.getElementById('filt-operator').value;
   const fq = document.getElementById('filt-qc').value;
-
   let list = entries.slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.id>a.id?1:-1));
   if(from) list = list.filter(e=>e.date>=from);
   if(to) list = list.filter(e=>e.date<=to);
   if(fm) list = list.filter(e=>e.machine===fm);
   if(fo) list = list.filter(e=>e.operator===fo);
   if(fq) list = list.filter(e=>e.qc===fq);
+  return list;
+}
+
+function renderDataTable(){
+  const list = getFilteredEntries();
 
   const tbody = document.getElementById('dataTableBody');
   if(list.length===0){
@@ -845,9 +851,10 @@ document.getElementById('clearFilters').addEventListener('click', ()=>{
   renderDataTable();
 });
 document.getElementById('exportCsv').addEventListener('click', ()=>{
-  const rows = [['Tanggal','Shift','Mesin','Operator','QC','Jenis Problem','Deskripsi','Downtime (menit)']];
-  entries.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
-    rows.push([e.date,e.shift,e.machine,e.operator,e.qc,e.problemType,e.desc,e.downtime]);
+  const list = getFilteredEntries().slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const rows = [['Tanggal','Shift','Mesin','Operator','QC','Jenis Problem','Deskripsi','Downtime (menit)','Foto Problem','Foto NC']];
+  list.forEach(e=>{
+    rows.push([e.date,e.shift,e.machine,e.operator,e.qc,e.problemType,e.desc,e.downtime,e.photoProblem,e.photoNc]);
   });
   const csv = rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob = new Blob([csv],{type:'text/csv'});
@@ -855,6 +862,70 @@ document.getElementById('exportCsv').addEventListener('click', ()=>{
   const a = document.createElement('a');
   a.href = url; a.download = 'data-problem-produksi.csv'; a.click();
   URL.revokeObjectURL(url);
+});
+
+document.getElementById('exportExcel').addEventListener('click', async ()=>{
+  const btn = document.getElementById('exportExcel');
+  if(typeof ExcelJS === 'undefined'){ showToast('Gagal memuat library Excel, cek koneksi internet'); return; }
+  const list = getFilteredEntries().slice().sort((a,b)=>a.date.localeCompare(b.date));
+  if(list.length===0){ showToast('Tidak ada data untuk diekspor'); return; }
+
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Membuat file...';
+  try{
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Panel Problem Produksi';
+    wb.created = new Date();
+
+    const ws = wb.addWorksheet('Data Problem', { views:[{ state:'frozen', ySplit:1 }] });
+    const columnDefs = [
+      { name:'Tanggal', width:13 },
+      { name:'Shift', width:10 },
+      { name:'Mesin', width:14 },
+      { name:'Operator', width:18 },
+      { name:'QC', width:18 },
+      { name:'Jenis Problem', width:22 },
+      { name:'Deskripsi', width:45 },
+      { name:'Downtime (menit)', width:16 },
+      { name:'Foto Problem', width:36 },
+      { name:'Foto NC', width:36 }
+    ];
+    ws.columns = columnDefs.map(c=>({ width:c.width }));
+
+    const rows = list.map(e=>[
+      e.date, e.shift||'-', e.machine, e.operator, e.qc, e.problemType, e.desc,
+      e.downtime ? Number(e.downtime) : null, e.photoProblem||'', e.photoNc||''
+    ]);
+
+    ws.addTable({
+      name: 'DataProblemProduksi',
+      ref: 'A1',
+      headerRow: true,
+      totalsRow: false,
+      style: { theme: 'TableStyleMedium9', showRowStripes: true },
+      columns: columnDefs.map(c=>({ name:c.name, filterButton:true })),
+      rows: rows
+    });
+
+    ws.getRow(1).font = { bold:true, color:{ argb:'FFFFFFFF' } };
+    ws.getRow(1).alignment = { vertical:'middle' };
+    ws.getColumn(7).alignment = { wrapText:true, vertical:'top' };
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const today = new Date().toISOString().slice(0,10);
+    a.href = url; a.download = `data-problem-produksi-${today}.xlsx`; a.click();
+    URL.revokeObjectURL(url);
+  }catch(err){
+    console.error(err);
+    showToast('Gagal membuat file Excel: '+err.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 });
 
 /* ---------- MASTER DATA ---------- */
