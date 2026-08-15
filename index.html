@@ -188,7 +188,7 @@ tr:hover td{background:var(--panel-2);}
 /* gallery / photo cards */
 .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
 .photo-card{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;overflow:hidden;}
-.photo-card .photo-row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);}
+.photo-card .photo-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);}
 .photo-card .photo-col{position:relative;background:var(--panel-2);}
 .photo-card .photo-col img{width:100%;height:120px;object-fit:cover;display:block;cursor:zoom-in;}
 .photo-card .photo-col img:hover{opacity:.85;}
@@ -303,7 +303,7 @@ tr:hover td{background:var(--panel-2);}
           <label>Detail / Deskripsi Problem</label>
           <textarea id="f-desc" placeholder="Jelaskan problem yang terjadi secara lengkap..." required></textarea>
         </div>
-        <div class="form-grid">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;">
           <div class="field">
             <label>Foto Problem</label>
             <div class="photo-input-wrap">
@@ -316,6 +316,13 @@ tr:hover td{background:var(--panel-2);}
             <div class="photo-input-wrap">
               <input type="file" id="f-photo-nc" accept="image/*">
               <img class="photo-preview" id="preview-nc">
+            </div>
+          </div>
+          <div class="field">
+            <label>Foto Label Palet</label>
+            <div class="photo-input-wrap">
+              <input type="file" id="f-photo-label" accept="image/*">
+              <img class="photo-preview" id="preview-label">
             </div>
           </div>
         </div>
@@ -450,7 +457,8 @@ function rowToEntry(r){
     id: r.id, date: r.date, shift: r.shift||'', machine: r.machine||'',
     operator: r.operator||'', qc: r.qc||'', problemType: r.problem_type||'',
     downtime: r.downtime||'', desc: r.description||'',
-    photoProblem: r.photo_problem_url||'', photoNc: r.photo_nc_url||''
+    photoProblem: r.photo_problem_url||'', photoNc: r.photo_nc_url||'',
+    photoLabel: r.photo_label_palet_url||''
   };
 }
 
@@ -566,6 +574,7 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   const msg = document.getElementById('saveMsg');
   const fileProblem = document.getElementById('f-photo-problem').files[0];
   const fileNc = document.getElementById('f-photo-nc').files[0];
+  const fileLabel = document.getElementById('f-photo-label').files[0];
 
   const entry = {
     id: uid(),
@@ -578,7 +587,8 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
     downtime: document.getElementById('f-downtime').value || '',
     desc: document.getElementById('f-desc').value.trim(),
     photoProblem: '',
-    photoNc: ''
+    photoNc: '',
+    photoLabel: ''
   };
   if(!entry.machine || !entry.operator || !entry.qc || !entry.problemType || !entry.desc){
     showToast('Lengkapi semua field wajib'); return;
@@ -590,6 +600,7 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   try{
     if(fileProblem) entry.photoProblem = await uploadPhoto(fileProblem, entry.id+'-problem');
     if(fileNc) entry.photoNc = await uploadPhoto(fileNc, entry.id+'-nc');
+    if(fileLabel) entry.photoLabel = await uploadPhoto(fileLabel, entry.id+'-label');
   }catch(err){
     submitBtn.disabled = false;
     msg.textContent = '';
@@ -601,7 +612,8 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
     id: entry.id, date: entry.date, shift: entry.shift, machine: entry.machine,
     operator: entry.operator, qc: entry.qc, problem_type: entry.problemType,
     downtime: entry.downtime, description: entry.desc,
-    photo_problem_url: entry.photoProblem, photo_nc_url: entry.photoNc
+    photo_problem_url: entry.photoProblem, photo_nc_url: entry.photoNc,
+    photo_label_palet_url: entry.photoLabel
   });
   submitBtn.disabled = false;
   if(error){ msg.textContent=''; showToast('Gagal menyimpan: '+error.message); return; }
@@ -611,8 +623,10 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   document.getElementById('f-downtime').value='';
   document.getElementById('f-photo-problem').value='';
   document.getElementById('f-photo-nc').value='';
+  document.getElementById('f-photo-label').value='';
   document.getElementById('preview-problem').classList.remove('show');
   document.getElementById('preview-nc').classList.remove('show');
+  document.getElementById('preview-label').classList.remove('show');
   msg.style.color = 'var(--green)';
   msg.textContent = 'Tersimpan ✓';
   setTimeout(()=>msg.textContent='', 1800);
@@ -673,7 +687,7 @@ function pathFromPublicUrl(url){
 }
 async function deletePhotosForEntry(entry){
   if(!sb || !entry) return;
-  const files = [pathFromPublicUrl(entry.photoProblem), pathFromPublicUrl(entry.photoNc)].filter(Boolean);
+  const files = [pathFromPublicUrl(entry.photoProblem), pathFromPublicUrl(entry.photoNc), pathFromPublicUrl(entry.photoLabel)].filter(Boolean);
   if(files.length){
     try{ await sb.storage.from('problem-photos').remove(files); }catch(e){ console.error('Gagal hapus file foto:', e); }
   }
@@ -690,6 +704,7 @@ function bindPhotoPreview(inputId, previewId){
 }
 bindPhotoPreview('f-photo-problem','preview-problem');
 bindPhotoPreview('f-photo-nc','preview-nc');
+bindPhotoPreview('f-photo-label','preview-label');
 
 /* ---------- LIGHTBOX ---------- */
 function openLightbox(url){
@@ -711,6 +726,7 @@ function photoCardHtml(e){
     <div class="photo-row">
       ${col(e.photoProblem,'Problem')}
       ${col(e.photoNc,'NC')}
+      ${col(e.photoLabel,'Label Palet')}
     </div>
     <div class="info">
       <div class="meta">${esc(e.date)} · <span class="mtag">${esc(e.machine)}</span></div>
@@ -725,7 +741,7 @@ function bindLightboxTriggers(container){
 }
 function renderRecentPhotos(){
   const box = document.getElementById('recentPhotos');
-  const wk = weekEntries().filter(e=>e.photoProblem||e.photoNc)
+  const wk = weekEntries().filter(e=>e.photoProblem||e.photoNc||e.photoLabel)
     .slice().sort((a,b)=> b.date.localeCompare(a.date)).slice(0,6);
   if(wk.length===0){ box.innerHTML = '<div class="empty">Belum ada foto problem minggu ini.</div>'; return; }
   box.innerHTML = wk.map(photoCardHtml).join('');
@@ -733,7 +749,7 @@ function renderRecentPhotos(){
 }
 function renderGallery(){
   const grid = document.getElementById('galleryGrid');
-  const withPhotos = entries.filter(e=>e.photoProblem||e.photoNc)
+  const withPhotos = entries.filter(e=>e.photoProblem||e.photoNc||e.photoLabel)
     .slice().sort((a,b)=> b.date.localeCompare(a.date));
   if(withPhotos.length===0){ grid.innerHTML = '<div class="empty">Belum ada problem dengan foto.</div>'; return; }
   grid.innerHTML = withPhotos.map(photoCardHtml).join('');
@@ -852,9 +868,9 @@ document.getElementById('clearFilters').addEventListener('click', ()=>{
 });
 document.getElementById('exportCsv').addEventListener('click', ()=>{
   const list = getFilteredEntries().slice().sort((a,b)=>a.date.localeCompare(b.date));
-  const rows = [['Tanggal','Shift','Mesin','Operator','QC','Jenis Problem','Deskripsi','Downtime (menit)','Foto Problem','Foto NC']];
+  const rows = [['Tanggal','Shift','Mesin','Operator','QC','Jenis Problem','Deskripsi','Downtime (menit)','Foto Problem','Foto NC','Foto Label Palet']];
   list.forEach(e=>{
-    rows.push([e.date,e.shift,e.machine,e.operator,e.qc,e.problemType,e.desc,e.downtime,e.photoProblem,e.photoNc]);
+    rows.push([e.date,e.shift,e.machine,e.operator,e.qc,e.problemType,e.desc,e.downtime,e.photoProblem,e.photoNc,e.photoLabel]);
   });
   const csv = rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob = new Blob([csv],{type:'text/csv'});
@@ -864,6 +880,24 @@ document.getElementById('exportCsv').addEventListener('click', ()=>{
   URL.revokeObjectURL(url);
 });
 
+async function fetchImageForExcel(url){
+  if(!url) return null;
+  try{
+    const res = await fetch(url);
+    if(!res.ok) return null;
+    const blob = await res.blob();
+    const buffer = await blob.arrayBuffer();
+    let extension = 'png';
+    if(blob.type.includes('jpeg') || blob.type.includes('jpg')) extension = 'jpeg';
+    else if(blob.type.includes('gif')) extension = 'gif';
+    else if(blob.type.includes('png')) extension = 'png';
+    return { buffer, extension };
+  }catch(err){
+    console.error('Gagal mengambil foto untuk Excel:', url, err);
+    return null;
+  }
+}
+
 document.getElementById('exportExcel').addEventListener('click', async ()=>{
   const btn = document.getElementById('exportExcel');
   if(typeof ExcelJS === 'undefined'){ showToast('Gagal memuat library Excel, cek koneksi internet'); return; }
@@ -872,7 +906,6 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
 
   btn.disabled = true;
   const originalText = btn.textContent;
-  btn.textContent = 'Membuat file...';
   try{
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Panel Problem Produksi';
@@ -888,14 +921,15 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
       { name:'Jenis Problem', width:22 },
       { name:'Deskripsi', width:45 },
       { name:'Downtime (menit)', width:16 },
-      { name:'Foto Problem', width:36 },
-      { name:'Foto NC', width:36 }
+      { name:'Foto Problem', width:16 },
+      { name:'Foto NC', width:16 },
+      { name:'Foto Label Palet', width:16 }
     ];
     ws.columns = columnDefs.map(c=>({ width:c.width }));
 
     const rows = list.map(e=>[
       e.date, e.shift||'-', e.machine, e.operator, e.qc, e.problemType, e.desc,
-      e.downtime ? Number(e.downtime) : null, e.photoProblem||'', e.photoNc||''
+      e.downtime ? Number(e.downtime) : null, '', '', ''
     ]);
 
     ws.addTable({
@@ -912,6 +946,37 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
     ws.getRow(1).alignment = { vertical:'middle' };
     ws.getColumn(7).alignment = { wrapText:true, vertical:'top' };
 
+    // Ambil dan sisipkan foto langsung ke dalam sel (kolom 9, 10, 11 = index 8,9,10 nol-basis)
+    const photoCols = [
+      { key:'photoProblem', colIndex: 8 },
+      { key:'photoNc', colIndex: 9 },
+      { key:'photoLabel', colIndex: 10 }
+    ];
+    let done = 0;
+    const totalPhotos = list.reduce((n,e)=> n + photoCols.filter(pc=>e[pc.key]).length, 0);
+
+    for(let i=0;i<list.length;i++){
+      const e = list[i];
+      const excelRow = i + 2; // baris 1 = header
+      let rowHasPhoto = false;
+      for(const pc of photoCols){
+        const url = e[pc.key];
+        if(!url) continue;
+        btn.textContent = totalPhotos ? `Mengambil foto ${++done}/${totalPhotos}...` : 'Membuat file...';
+        const img = await fetchImageForExcel(url);
+        if(img){
+          const imgId = wb.addImage({ buffer: img.buffer, extension: img.extension });
+          ws.addImage(imgId, {
+            tl: { col: pc.colIndex, row: excelRow - 1 },
+            ext: { width: 90, height: 90 }
+          });
+          rowHasPhoto = true;
+        }
+      }
+      if(rowHasPhoto) ws.getRow(excelRow).height = 70;
+    }
+
+    btn.textContent = 'Menyusun file...';
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
