@@ -188,7 +188,7 @@ tr:hover td{background:var(--panel-2);}
 /* gallery / photo cards */
 .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
 .photo-card{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;overflow:hidden;}
-.photo-card .photo-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);}
+.photo-card .photo-row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);}
 .photo-card .photo-col{position:relative;background:var(--panel-2);}
 .photo-card .photo-col img{width:100%;height:120px;object-fit:cover;display:block;cursor:zoom-in;}
 .photo-card .photo-col img:hover{opacity:.85;}
@@ -213,6 +213,26 @@ tr:hover td{background:var(--panel-2);}
 }
 .lightbox.show{display:flex;}
 .lightbox img{max-width:100%;max-height:100%;border-radius:6px;box-shadow:0 10px 40px rgba(0,0,0,.6);}
+/* pallet dinamis di form */
+.pallet-row{
+  display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:4px;padding:8px;margin-bottom:8px;flex-wrap:wrap;
+}
+.pallet-row input[type=text]{flex:1;min-width:140px;}
+.pallet-row .photo-input-wrap{flex:1;min-width:180px;margin-bottom:0;}
+.pallet-row .remove-pallet-row{flex-shrink:0;}
+
+/* chip palet di kartu foto */
+.pallet-list{display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 10px;}
+.pallet-chip{
+  display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);
+  border-radius:4px;padding:3px 8px 3px 3px;font-size:11px;color:var(--text-dim);
+}
+.pallet-chip img{width:26px;height:26px;object-fit:cover;border-radius:3px;cursor:zoom-in;}
+.pallet-chip .no-photo-sm{width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+  background:var(--panel-2);border-radius:3px;font-size:9px;color:var(--text-dim);}
+
+.btn.editing-active{outline:2px solid var(--amber);}
 </style>
 </head>
 <body>
@@ -287,10 +307,6 @@ tr:hover td{background:var(--panel-2);}
             <select id="f-machine" required></select>
           </div>
           <div class="field">
-            <label>Nomor Palet</label>
-            <input type="text" id="f-pallet" placeholder="cth. PLT-0001">
-          </div>
-          <div class="field">
             <label>Operator</label>
             <select id="f-operator" required></select>
           </div>
@@ -329,7 +345,7 @@ tr:hover td{background:var(--panel-2);}
           <label>Detail / Deskripsi Problem</label>
           <textarea id="f-desc" placeholder="Jelaskan problem yang terjadi secara lengkap..." required></textarea>
         </div>
-        <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
           <div class="field">
             <label>Foto Problem</label>
             <div class="photo-input-wrap">
@@ -344,15 +360,14 @@ tr:hover td{background:var(--panel-2);}
               <img class="photo-preview" id="preview-nc">
             </div>
           </div>
-          <div class="field">
-            <label>Foto Label Palet</label>
-            <div class="photo-input-wrap">
-              <input type="file" id="f-photo-label" accept="image/*">
-              <img class="photo-preview" id="preview-label">
-            </div>
-          </div>
         </div>
-        <button type="submit" class="btn">Simpan Problem</button>
+        <div class="field">
+          <label>Nomor Palet &amp; Foto Label Palet <span style="color:var(--text-dim);font-weight:400;">(bisa lebih dari satu)</span></label>
+          <div id="palletRows"></div>
+          <button type="button" class="btn ghost small" id="addPalletRow" style="margin-top:6px;">+ Tambah Palet</button>
+        </div>
+        <button type="submit" class="btn" id="submitBtnMain">Simpan Problem</button>
+        <button type="button" class="btn ghost" id="cancelEditBtn" style="display:none;margin-left:8px;">Batal Edit</button>
         <span id="saveMsg" style="margin-left:10px;color:var(--green);font-size:12.5px;"></span>
       </form>
     </div>
@@ -480,13 +495,16 @@ function showToast(msg){
 }
 
 function rowToEntry(r){
+  let pallets = Array.isArray(r.pallets) ? r.pallets : [];
+  if(pallets.length===0 && (r.pallet_number || r.photo_label_palet_url)){
+    pallets = [{ number: r.pallet_number||'', photo: r.photo_label_palet_url||'' }];
+  }
   return {
     id: r.id, date: r.date, shift: r.shift||'', machine: r.machine||'',
     operator: r.operator||'', qc: r.qc||'', problemType: r.problem_type||'',
     downtime: r.downtime||'', desc: r.description||'',
     photoProblem: r.photo_problem_url||'', photoNc: r.photo_nc_url||'',
-    photoLabel: r.photo_label_palet_url||'',
-    palletNumber: r.pallet_number||'',
+    pallets: pallets,
     qtyProduction: r.qty_production!=null ? Number(r.qty_production) : null,
     totalReject: r.total_reject!=null ? Number(r.total_reject) : null,
     qtyTotal: r.qty_total!=null ? Number(r.qty_total) : null,
@@ -602,14 +620,15 @@ document.getElementById('f-date').value = fmt(new Date());
 document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
   if(!ensureConfigured()) return;
-  const submitBtn = ev.target.querySelector('button[type=submit]');
+  const submitBtn = document.getElementById('submitBtnMain');
   const msg = document.getElementById('saveMsg');
+  const isEdit = !!editingId;
+  const entryId = isEdit ? editingId : uid();
+
   const fileProblem = document.getElementById('f-photo-problem').files[0];
   const fileNc = document.getElementById('f-photo-nc').files[0];
-  const fileLabel = document.getElementById('f-photo-label').files[0];
 
-  const entry = {
-    id: uid(),
+  const base = {
     date: document.getElementById('f-date').value,
     shift: document.getElementById('f-shift').value,
     machine: document.getElementById('f-machine').value,
@@ -618,27 +637,47 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
     problemType: document.getElementById('f-problemtype').value,
     downtime: document.getElementById('f-downtime').value || '',
     desc: document.getElementById('f-desc').value.trim(),
-    photoProblem: '',
-    photoNc: '',
-    photoLabel: '',
-    palletNumber: document.getElementById('f-pallet').value.trim(),
     qtyProduction: document.getElementById('f-qty-production').value===''? null : Number(document.getElementById('f-qty-production').value),
     totalReject: document.getElementById('f-total-reject').value===''? null : Number(document.getElementById('f-total-reject').value)
   };
-  const { qtyTotal, rejectPct } = calcRejectStats(entry.qtyProduction, entry.totalReject);
-  entry.qtyTotal = (entry.qtyProduction==null && entry.totalReject==null) ? null : qtyTotal;
-  entry.rejectPercentage = (entry.qtyProduction==null && entry.totalReject==null) ? null : rejectPct;
-  if(!entry.machine || !entry.operator || !entry.qc || !entry.problemType || !entry.desc){
+  if(!base.machine || !base.operator || !base.qc || !base.problemType || !base.desc){
     showToast('Lengkapi semua field wajib'); return;
   }
+  const { qtyTotal, rejectPct } = calcRejectStats(base.qtyProduction, base.totalReject);
+  base.qtyTotal = (base.qtyProduction==null && base.totalReject==null) ? null : qtyTotal;
+  base.rejectPercentage = (base.qtyProduction==null && base.totalReject==null) ? null : rejectPct;
 
   submitBtn.disabled = true;
   msg.style.color = 'var(--text-dim)';
-  msg.textContent = 'Mengunggah foto & menyimpan...';
+  msg.textContent = isEdit ? 'Menyimpan perubahan...' : 'Mengunggah foto & menyimpan...';
+
+  const filesToDeleteAfterSuccess = [];
+  let photoProblemUrl = isEdit ? editingExistingPhotoProblem : '';
+  let photoNcUrl = isEdit ? editingExistingPhotoNc : '';
+  const pallets = [];
+
   try{
-    if(fileProblem) entry.photoProblem = await uploadPhoto(fileProblem, entry.id+'-problem');
-    if(fileNc) entry.photoNc = await uploadPhoto(fileNc, entry.id+'-nc');
-    if(fileLabel) entry.photoLabel = await uploadPhoto(fileLabel, entry.id+'-label');
+    if(fileProblem){
+      const newUrl = await uploadPhoto(fileProblem, entryId+'-problem-'+Date.now());
+      if(isEdit && editingExistingPhotoProblem) filesToDeleteAfterSuccess.push(editingExistingPhotoProblem);
+      photoProblemUrl = newUrl;
+    }
+    if(fileNc){
+      const newUrl = await uploadPhoto(fileNc, entryId+'-nc-'+Date.now());
+      if(isEdit && editingExistingPhotoNc) filesToDeleteAfterSuccess.push(editingExistingPhotoNc);
+      photoNcUrl = newUrl;
+    }
+    for(let i=0;i<palletFormState.length;i++){
+      const row = palletFormState[i];
+      let photoUrl = row.existingPhoto || '';
+      if(row.file){
+        const newUrl = await uploadPhoto(row.file, entryId+'-label-'+i+'-'+Date.now());
+        if(row.existingPhoto) filesToDeleteAfterSuccess.push(row.existingPhoto);
+        photoUrl = newUrl;
+      }
+      const number = (row.number||'').trim();
+      if(number || photoUrl) pallets.push({ number, photo: photoUrl });
+    }
   }catch(err){
     submitBtn.disabled = false;
     msg.textContent = '';
@@ -646,40 +685,57 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
     return;
   }
 
-  const { error } = await sb.from('problem_entries').insert({
-    id: entry.id, date: entry.date, shift: entry.shift, machine: entry.machine,
-    operator: entry.operator, qc: entry.qc, problem_type: entry.problemType,
-    downtime: entry.downtime, description: entry.desc,
-    photo_problem_url: entry.photoProblem, photo_nc_url: entry.photoNc,
-    photo_label_palet_url: entry.photoLabel,
-    pallet_number: entry.palletNumber, qty_production: entry.qtyProduction,
-    total_reject: entry.totalReject, qty_total: entry.qtyTotal,
-    reject_percentage: entry.rejectPercentage
-  });
+  const payload = {
+    date: base.date, shift: base.shift, machine: base.machine,
+    operator: base.operator, qc: base.qc, problem_type: base.problemType,
+    downtime: base.downtime, description: base.desc,
+    photo_problem_url: photoProblemUrl, photo_nc_url: photoNcUrl,
+    pallets: pallets,
+    qty_production: base.qtyProduction, total_reject: base.totalReject,
+    qty_total: base.qtyTotal, reject_percentage: base.rejectPercentage
+  };
+
+  let error;
+  if(isEdit){
+    ({ error } = await sb.from('problem_entries').update(payload).eq('id', entryId));
+  }else{
+    ({ error } = await sb.from('problem_entries').insert({ id: entryId, ...payload }));
+  }
   submitBtn.disabled = false;
   if(error){ msg.textContent=''; showToast('Gagal menyimpan: '+error.message); return; }
 
-  entries.push(entry);
-  document.getElementById('f-desc').value='';
-  document.getElementById('f-downtime').value='';
-  document.getElementById('f-pallet').value='';
-  document.getElementById('f-qty-production').value='';
-  document.getElementById('f-total-reject').value='';
-  document.getElementById('f-qty-total').value='';
-  document.getElementById('f-reject-pct').value='';
-  document.getElementById('f-photo-problem').value='';
-  document.getElementById('f-photo-nc').value='';
-  document.getElementById('f-photo-label').value='';
-  document.getElementById('preview-problem').classList.remove('show');
-  document.getElementById('preview-nc').classList.remove('show');
-  document.getElementById('preview-label').classList.remove('show');
-  msg.style.color = 'var(--green)';
-  msg.textContent = 'Tersimpan ✓';
-  setTimeout(()=>msg.textContent='', 1800);
+  if(filesToDeleteAfterSuccess.length){
+    const paths = filesToDeleteAfterSuccess.map(pathFromPublicUrl).filter(Boolean);
+    if(paths.length) sb.storage.from('problem-photos').remove(paths).catch(()=>{});
+  }
+
+  const localEntry = {
+    id: entryId, date: base.date, shift: base.shift, machine: base.machine,
+    operator: base.operator, qc: base.qc, problemType: base.problemType,
+    downtime: base.downtime, desc: base.desc,
+    photoProblem: photoProblemUrl, photoNc: photoNcUrl, pallets: pallets,
+    qtyProduction: base.qtyProduction, totalReject: base.totalReject,
+    qtyTotal: base.qtyTotal, rejectPercentage: base.rejectPercentage
+  };
+
+  if(isEdit){
+    const idx = entries.findIndex(x=>x.id===entryId);
+    if(idx!==-1) entries[idx] = localEntry;
+    resetFormToBlank();
+    showToast('Perubahan tersimpan');
+  }else{
+    entries.push(localEntry);
+    resetFormToBlank();
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Tersimpan ✓';
+    setTimeout(()=>msg.textContent='', 1800);
+  }
   renderTodayList();
   renderAll();
   renderGallery();
+  renderDataTable();
 });
+
 
 function renderTodayList(){
   const today = document.getElementById('f-date').value || fmt(new Date());
@@ -695,8 +751,17 @@ function renderTodayList(){
       <td>${esc(e.qc)}</td>
       <td>${esc(e.problemType)}</td>
       <td class="desc-cell">${esc(e.desc)}</td>
-      <td><button class="btn danger small" data-del="${e.id}">Hapus</button></td>
+      <td style="white-space:nowrap;">
+        <button class="btn ghost small" data-edit="${e.id}">Edit</button>
+        <button class="btn danger small" data-del="${e.id}">Hapus</button>
+      </td>
     </tr>`).join('') + '</tbody></table>';
+  box.querySelectorAll('[data-edit]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const target = entries.find(x=>x.id===b.dataset.edit);
+      if(target) startEdit(target);
+    });
+  });
   box.querySelectorAll('[data-del]').forEach(b=>{
     b.addEventListener('click', async ()=>{
       if(!ensureConfigured()) return;
@@ -733,7 +798,8 @@ function pathFromPublicUrl(url){
 }
 async function deletePhotosForEntry(entry){
   if(!sb || !entry) return;
-  const files = [pathFromPublicUrl(entry.photoProblem), pathFromPublicUrl(entry.photoNc), pathFromPublicUrl(entry.photoLabel)].filter(Boolean);
+  const palletPaths = (entry.pallets||[]).map(p=>pathFromPublicUrl(p.photo));
+  const files = [pathFromPublicUrl(entry.photoProblem), pathFromPublicUrl(entry.photoNc), ...palletPaths].filter(Boolean);
   if(files.length){
     try{ await sb.storage.from('problem-photos').remove(files); }catch(e){ console.error('Gagal hapus file foto:', e); }
   }
@@ -750,7 +816,116 @@ function bindPhotoPreview(inputId, previewId){
 }
 bindPhotoPreview('f-photo-problem','preview-problem');
 bindPhotoPreview('f-photo-nc','preview-nc');
-bindPhotoPreview('f-photo-label','preview-label');
+
+/* ---------- BARIS PALET DINAMIS ---------- */
+let palletFormState = [ { number:'', file:null, existingPhoto:'' } ];
+
+function renderPalletRows(){
+  const box = document.getElementById('palletRows');
+  box.innerHTML = palletFormState.map((p,i)=>`
+    <div class="pallet-row" data-idx="${i}">
+      <input type="text" class="pallet-number-input" placeholder="Nomor Palet cth. PLT-0001" value="${esc(p.number)}">
+      <div class="photo-input-wrap">
+        <input type="file" accept="image/*" class="pallet-photo-input">
+        <img class="photo-preview pallet-preview ${p.existingPhoto || p.file ? 'show':''}" src="${p.file ? '' : esc(p.existingPhoto||'')}">
+      </div>
+      <button type="button" class="btn danger small remove-pallet-row">Hapus</button>
+    </div>`).join('');
+
+  box.querySelectorAll('.pallet-row').forEach(row=>{
+    const idx = Number(row.dataset.idx);
+    row.querySelector('.pallet-number-input').addEventListener('input', (ev)=>{
+      palletFormState[idx].number = ev.target.value;
+    });
+    const fileInput = row.querySelector('.pallet-photo-input');
+    const preview = row.querySelector('.pallet-preview');
+    fileInput.addEventListener('change', ()=>{
+      const file = fileInput.files[0];
+      palletFormState[idx].file = file || null;
+      if(file){
+        preview.src = URL.createObjectURL(file);
+        preview.classList.add('show');
+      }else if(palletFormState[idx].existingPhoto){
+        preview.src = palletFormState[idx].existingPhoto;
+        preview.classList.add('show');
+      }else{
+        preview.src=''; preview.classList.remove('show');
+      }
+    });
+    row.querySelector('.remove-pallet-row').addEventListener('click', ()=>{
+      palletFormState.splice(idx,1);
+      if(palletFormState.length===0) palletFormState.push({ number:'', file:null, existingPhoto:'' });
+      renderPalletRows();
+    });
+  });
+}
+document.getElementById('addPalletRow').addEventListener('click', ()=>{
+  palletFormState.push({ number:'', file:null, existingPhoto:'' });
+  renderPalletRows();
+});
+renderPalletRows();
+
+/* ---------- MODE EDIT ---------- */
+let editingId = null;
+let editingExistingPhotoProblem = '';
+let editingExistingPhotoNc = '';
+
+function resetFormToBlank(){
+  document.getElementById('entryForm').reset();
+  document.getElementById('preview-problem').classList.remove('show');
+  document.getElementById('preview-problem').src='';
+  document.getElementById('preview-nc').classList.remove('show');
+  document.getElementById('preview-nc').src='';
+  document.getElementById('f-qty-total').value='';
+  document.getElementById('f-reject-pct').value='';
+  palletFormState = [ { number:'', file:null, existingPhoto:'' } ];
+  renderPalletRows();
+  editingId = null;
+  editingExistingPhotoProblem = '';
+  editingExistingPhotoNc = '';
+  document.getElementById('submitBtnMain').textContent = 'Simpan Problem';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+}
+
+function startEdit(entry){
+  editingId = entry.id;
+  editingExistingPhotoProblem = entry.photoProblem || '';
+  editingExistingPhotoNc = entry.photoNc || '';
+
+  document.getElementById('f-date').value = entry.date || '';
+  document.getElementById('f-shift').value = entry.shift || '';
+  document.getElementById('f-machine').value = entry.machine || '';
+  document.getElementById('f-operator').value = entry.operator || '';
+  document.getElementById('f-qc').value = entry.qc || '';
+  document.getElementById('f-problemtype').value = entry.problemType || '';
+  document.getElementById('f-downtime').value = entry.downtime || '';
+  document.getElementById('f-desc').value = entry.desc || '';
+  document.getElementById('f-qty-production').value = entry.qtyProduction!=null ? entry.qtyProduction : '';
+  document.getElementById('f-total-reject').value = entry.totalReject!=null ? entry.totalReject : '';
+  updateRejectPreview();
+
+  document.getElementById('f-photo-problem').value = '';
+  document.getElementById('f-photo-nc').value = '';
+  const pp = document.getElementById('preview-problem');
+  if(entry.photoProblem){ pp.src = entry.photoProblem; pp.classList.add('show'); }
+  else{ pp.src=''; pp.classList.remove('show'); }
+  const pn = document.getElementById('preview-nc');
+  if(entry.photoNc){ pn.src = entry.photoNc; pn.classList.add('show'); }
+  else{ pn.src=''; pn.classList.remove('show'); }
+
+  palletFormState = (entry.pallets && entry.pallets.length>0)
+    ? entry.pallets.map(p=>({ number:p.number||'', file:null, existingPhoto:p.photo||'' }))
+    : [ { number:'', file:null, existingPhoto:'' } ];
+  renderPalletRows();
+
+  document.getElementById('submitBtnMain').textContent = 'Update Problem';
+  document.getElementById('cancelEditBtn').style.display = 'inline-block';
+
+  document.querySelector('.tab-btn[data-tab="input"]').click();
+  document.getElementById('entryForm').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+document.getElementById('cancelEditBtn').addEventListener('click', resetFormToBlank);
 
 /* ---------- KALKULASI QTY TOTAL & % REJECT ---------- */
 function calcRejectStats(qtyProduction, totalReject){
@@ -786,12 +961,18 @@ function photoCardHtml(e){
   const col = (url, label) => url
     ? `<div class="photo-col"><span class="cap">${label}</span><img src="${esc(url)}" data-lightbox="${esc(url)}" alt="${label}"></div>`
     : `<div class="photo-col"><span class="cap">${label}</span><div class="no-photo">Tidak ada foto</div></div>`;
+  const pallets = e.pallets||[];
+  const palletHtml = pallets.length===0 ? '' : `<div class="pallet-list">${pallets.map(p=>`
+    <div class="pallet-chip">
+      ${p.photo ? `<img src="${esc(p.photo)}" data-lightbox="${esc(p.photo)}" alt="Label Palet ${esc(p.number)}">` : '<div class="no-photo-sm">-</div>'}
+      <span>${esc(p.number||'(tanpa nomor)')}</span>
+    </div>`).join('')}</div>`;
   return `<div class="photo-card">
     <div class="photo-row">
       ${col(e.photoProblem,'Problem')}
       ${col(e.photoNc,'NC')}
-      ${col(e.photoLabel,'Label Palet')}
     </div>
+    ${palletHtml}
     <div class="info">
       <div class="meta">${esc(e.date)} · <span class="mtag">${esc(e.machine)}</span></div>
       <div class="desc">${esc(e.problemType)} — ${esc(e.desc)}</div>
@@ -805,7 +986,7 @@ function bindLightboxTriggers(container){
 }
 function renderRecentPhotos(){
   const box = document.getElementById('recentPhotos');
-  const wk = weekEntries().filter(e=>e.photoProblem||e.photoNc||e.photoLabel)
+  const wk = weekEntries().filter(e=>e.photoProblem||e.photoNc||(e.pallets&&e.pallets.length))
     .slice().sort((a,b)=> b.date.localeCompare(a.date)).slice(0,6);
   if(wk.length===0){ box.innerHTML = '<div class="empty">Belum ada foto problem minggu ini.</div>'; return; }
   box.innerHTML = wk.map(photoCardHtml).join('');
@@ -813,7 +994,7 @@ function renderRecentPhotos(){
 }
 function renderGallery(){
   const grid = document.getElementById('galleryGrid');
-  const withPhotos = entries.filter(e=>e.photoProblem||e.photoNc||e.photoLabel)
+  const withPhotos = entries.filter(e=>e.photoProblem||e.photoNc||(e.pallets&&e.pallets.length))
     .slice().sort((a,b)=> b.date.localeCompare(a.date));
   if(withPhotos.length===0){ grid.innerHTML = '<div class="empty">Belum ada problem dengan foto.</div>'; return; }
   grid.innerHTML = withPhotos.map(photoCardHtml).join('');
@@ -921,7 +1102,7 @@ function renderDataTable(){
       <td class="mono">${esc(e.date)}</td>
       <td>${esc(e.shift||'-')}</td>
       <td><span class="mtag">${esc(e.machine)}</span></td>
-      <td class="mono">${esc(e.palletNumber||'-')}</td>
+      <td class="mono">${(e.pallets&&e.pallets.length) ? esc(e.pallets.map(p=>p.number||'-').join(', ')) : '-'}</td>
       <td>${esc(e.operator)}</td>
       <td>${esc(e.qc)}</td>
       <td>${esc(e.problemType)}</td>
@@ -931,8 +1112,17 @@ function renderDataTable(){
       <td class="mono">${e.qtyTotal!=null?e.qtyTotal.toLocaleString('id-ID'):'-'}</td>
       <td class="mono">${e.rejectPercentage!=null?e.rejectPercentage.toFixed(2)+'%':'-'}</td>
       <td class="mono">${e.downtime?esc(e.downtime)+' mnt':'-'}</td>
-      <td><button class="btn danger small" data-del2="${e.id}">Hapus</button></td>
+      <td style="white-space:nowrap;">
+        <button class="btn ghost small" data-edit2="${e.id}">Edit</button>
+        <button class="btn danger small" data-del2="${e.id}">Hapus</button>
+      </td>
     </tr>`).join('');
+  tbody.querySelectorAll('[data-edit2]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const target = entries.find(x=>x.id===b.dataset.edit2);
+      if(target) startEdit(target);
+    });
+  });
   tbody.querySelectorAll('[data-del2]').forEach(b=>{
     b.addEventListener('click', async ()=>{
       if(!ensureConfigured()) return;
@@ -954,11 +1144,14 @@ document.getElementById('clearFilters').addEventListener('click', ()=>{
 });
 document.getElementById('exportCsv').addEventListener('click', ()=>{
   const list = getFilteredEntries().slice().sort((a,b)=>a.date.localeCompare(b.date));
-  const rows = [['Tanggal','Shift','Mesin','Nomor Palet','Operator','QC','Jenis Problem','Deskripsi','Qty Production','Total Reject','Qty Total','% Reject','Downtime (menit)','Foto Problem','Foto NC','Foto Label Palet']];
+  const rows = [['Tanggal','Shift','Mesin','Nomor Palet','Operator','QC','Jenis Problem','Deskripsi','Qty Production','Total Reject','Qty Total','% Reject','Downtime (menit)','Foto Problem','Foto NC','Foto Label Palet (semua)']];
   list.forEach(e=>{
-    rows.push([e.date,e.shift,e.machine,e.palletNumber,e.operator,e.qc,e.problemType,e.desc,
+    const pallets = e.pallets||[];
+    const palletNumbers = pallets.map(p=>p.number).filter(Boolean).join(' | ');
+    const palletPhotos = pallets.map(p=>p.photo).filter(Boolean).join(' | ');
+    rows.push([e.date,e.shift,e.machine,palletNumbers,e.operator,e.qc,e.problemType,e.desc,
       e.qtyProduction,e.totalReject,e.qtyTotal,e.rejectPercentage!=null?e.rejectPercentage.toFixed(2)+'%':'',
-      e.downtime,e.photoProblem,e.photoNc,e.photoLabel]);
+      e.downtime,e.photoProblem,e.photoNc,palletPhotos]);
   });
   const csv = rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob = new Blob([csv],{type:'text/csv'});
@@ -1020,14 +1213,18 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
     ];
     ws.columns = columnDefs.map(c=>({ width:c.width }));
 
-    const rows = list.map(e=>[
-      e.date, e.shift||'-', e.machine, e.palletNumber||'-', e.operator, e.qc, e.problemType, e.desc,
-      e.qtyProduction!=null ? e.qtyProduction : null,
-      e.totalReject!=null ? e.totalReject : null,
-      e.qtyTotal!=null ? e.qtyTotal : null,
-      e.rejectPercentage!=null ? Number(e.rejectPercentage.toFixed(2)) : null,
-      e.downtime ? Number(e.downtime) : null, '', '', ''
-    ]);
+    const rows = list.map(e=>{
+      const pallets = e.pallets||[];
+      const palletNumbers = pallets.map(p=>p.number).filter(Boolean).join(', ') || '-';
+      return [
+        e.date, e.shift||'-', e.machine, palletNumbers, e.operator, e.qc, e.problemType, e.desc,
+        e.qtyProduction!=null ? e.qtyProduction : null,
+        e.totalReject!=null ? e.totalReject : null,
+        e.qtyTotal!=null ? e.qtyTotal : null,
+        e.rejectPercentage!=null ? Number(e.rejectPercentage.toFixed(2)) : null,
+        e.downtime ? Number(e.downtime) : null, '', '', ''
+      ];
+    });
 
     ws.addTable({
       name: 'DataProblemProduksi',
@@ -1044,14 +1241,14 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
     ws.getColumn(8).alignment = { wrapText:true, vertical:'top' };
     ws.getColumn(12).numFmt = '0.00"%"';
 
-    // Ambil dan sisipkan foto langsung ke dalam sel (kolom Foto Problem, Foto NC, Foto Label Palet)
+    // Ambil dan sisipkan foto langsung ke dalam sel (kolom Foto Problem, Foto NC)
     const photoCols = [
       { key:'photoProblem', colIndex: 13 },
-      { key:'photoNc', colIndex: 14 },
-      { key:'photoLabel', colIndex: 15 }
+      { key:'photoNc', colIndex: 14 }
     ];
+    const PALLET_PHOTO_COL = 15; // kolom "Foto Label Palet" (nol-basis)
     let done = 0;
-    const totalPhotos = list.reduce((n,e)=> n + photoCols.filter(pc=>e[pc.key]).length, 0);
+    const totalPhotos = list.reduce((n,e)=> n + photoCols.filter(pc=>e[pc.key]).length + Math.min(1,(e.pallets||[]).filter(p=>p.photo).length), 0);
 
     for(let i=0;i<list.length;i++){
       const e = list[i];
@@ -1069,6 +1266,22 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
             ext: { width: 90, height: 90 }
           });
           rowHasPhoto = true;
+        }
+      }
+      const pallets = (e.pallets||[]).filter(p=>p.photo);
+      if(pallets.length>0){
+        btn.textContent = totalPhotos ? `Mengambil foto ${++done}/${totalPhotos}...` : 'Membuat file...';
+        const img = await fetchImageForExcel(pallets[0].photo);
+        if(img){
+          const imgId = wb.addImage({ buffer: img.buffer, extension: img.extension });
+          ws.addImage(imgId, {
+            tl: { col: PALLET_PHOTO_COL, row: excelRow - 1 },
+            ext: { width: 90, height: 90 }
+          });
+          rowHasPhoto = true;
+        }
+        if(pallets.length>1){
+          ws.getCell(excelRow, PALLET_PHOTO_COL+1).note = `Ada ${pallets.length} foto label palet untuk baris ini. Hanya foto pertama yang ditampilkan di sini — buka aplikasi untuk melihat semua foto label palet.`;
         }
       }
       if(rowHasPhoto) ws.getRow(excelRow).height = 70;
