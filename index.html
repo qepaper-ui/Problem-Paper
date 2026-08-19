@@ -233,6 +233,16 @@ tr:hover td{background:var(--panel-2);}
   background:var(--panel-2);border-radius:3px;font-size:9px;color:var(--text-dim);}
 
 .btn.editing-active{outline:2px solid var(--amber);}
+
+.period-toggle{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-right:10px;}
+.period-btn{
+  background:var(--panel-2);color:var(--text-dim);border:none;border-right:1px solid var(--line);
+  padding:6px 12px;font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;
+}
+.period-btn:last-child{border-right:none;}
+.period-btn.active{background:var(--amber);color:#1a1300;}
+.project-summary-row{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+.project-summary-row select{width:auto;min-width:200px;}
 </style>
 </head>
 <body>
@@ -244,6 +254,11 @@ tr:hover td{background:var(--panel-2);}
       <h1 class="display">Panel Problem Produksi</h1>
     </div>
     <div class="week-nav">
+      <div class="period-toggle" id="periodToggle">
+        <button class="period-btn" data-period="day">Harian</button>
+        <button class="period-btn active" data-period="week">Mingguan</button>
+        <button class="period-btn" data-period="month">Bulanan</button>
+      </div>
       <button id="prevWeek">‹</button>
       <div class="week-range mono" id="weekRange">–</div>
       <button id="nextWeek">›</button>
@@ -251,7 +266,7 @@ tr:hover td{background:var(--panel-2);}
   </div>
   <div class="hazard"></div>
   <nav class="tabs">
-    <button class="tab-btn active" data-tab="ringkasan">Ringkasan Mingguan</button>
+    <button class="tab-btn active" data-tab="ringkasan">Ringkasan</button>
     <button class="tab-btn" data-tab="input">Input Harian</button>
     <button class="tab-btn" data-tab="galeri">Galeri Foto</button>
     <button class="tab-btn" data-tab="data">Data Lengkap</button>
@@ -270,12 +285,16 @@ tr:hover td{background:var(--panel-2);}
       <div class="barlist" id="barMachine"></div>
     </div>
     <div class="panel">
-      <h2>Ringkasan Produksi &amp; Reject Minggu Ini</h2>
+      <h2>Ringkasan Produksi &amp; Reject <span id="rejectPanelLabel">Minggu Ini</span></h2>
       <div class="kpi-grid" id="rejectKpiGrid" style="margin-bottom:0;"></div>
     </div>
     <div class="panel">
       <h2>Jenis Problem Paling Sering</h2>
       <div class="barlist" id="barProblem"></div>
+    </div>
+    <div class="panel">
+      <h2>Problem per Nomor Project</h2>
+      <div class="barlist" id="barProject"></div>
     </div>
     <div class="panel">
       <h2>Problem Terbaru Dengan Foto</h2>
@@ -292,6 +311,11 @@ tr:hover td{background:var(--panel-2);}
           <div class="field">
             <label>Tanggal</label>
             <input type="date" id="f-date" required>
+          </div>
+          <div class="field">
+            <label>Nomor Project</label>
+            <input type="text" id="f-project" list="projectList" placeholder="cth. PRJ-2026-001">
+            <datalist id="projectList"></datalist>
           </div>
           <div class="field">
             <label>Shift</label>
@@ -393,6 +417,7 @@ tr:hover td{background:var(--panel-2);}
       <div class="filters">
         <input type="date" id="filt-from" title="Dari tanggal">
         <input type="date" id="filt-to" title="Sampai tanggal">
+        <select id="filt-project"><option value="">Semua Project</option></select>
         <select id="filt-machine"><option value="">Semua Mesin</option></select>
         <select id="filt-operator"><option value="">Semua Operator</option></select>
         <select id="filt-qc"><option value="">Semua QC</option></select>
@@ -404,7 +429,7 @@ tr:hover td{background:var(--panel-2);}
         <table id="dataTable">
           <thead>
             <tr>
-              <th>Tanggal</th><th>Shift</th><th>Mesin</th><th>No. Palet</th><th>Operator</th><th>QC</th>
+              <th>Tanggal</th><th>No. Project</th><th>Shift</th><th>Mesin</th><th>No. Palet</th><th>Operator</th><th>QC</th>
               <th>Jenis Problem</th><th>Deskripsi</th><th>Qty Production</th><th>Total Reject</th>
               <th>Qty Total</th><th>% Reject</th><th>Downtime</th><th></th>
             </tr>
@@ -471,7 +496,8 @@ function ensureConfigured(){
 
 let master = { mesin: [], operator: [], qc: [], jenisProblem: [] };
 let entries = [];
-let currentWeekStart = mondayOf(new Date());
+let currentAnchor = mondayOf(new Date());
+let periodMode = 'week';
 let dataReady = false;
 
 function mondayOf(d){
@@ -486,7 +512,25 @@ function fmtDisplay(d){
   return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
 }
 function addDays(d,n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function addMonths(d,n){ return new Date(d.getFullYear(), d.getMonth()+n, 1); }
+function firstOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+function lastOfMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
 function uid(){ return 'e'+Date.now()+Math.random().toString(36).slice(2,7); }
+
+function getPeriodRange(){
+  if(periodMode==='day'){
+    const d = new Date(currentAnchor); d.setHours(0,0,0,0);
+    return { start: d, end: d };
+  }
+  if(periodMode==='month'){
+    return { start: firstOfMonth(currentAnchor), end: lastOfMonth(currentAnchor) };
+  }
+  const start = mondayOf(currentAnchor);
+  return { start, end: addDays(start, 6) };
+}
+function fmtDisplayMonth(d){
+  return d.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+}
 
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -505,6 +549,7 @@ function rowToEntry(r){
     downtime: r.downtime||'', desc: r.description||'',
     photoProblem: r.photo_problem_url||'', photoNc: r.photo_nc_url||'',
     pallets: pallets,
+    projectNumber: r.project_number||'',
     qtyProduction: r.qty_production!=null ? Number(r.qty_production) : null,
     totalReject: r.total_reject!=null ? Number(r.total_reject) : null,
     qtyTotal: r.qty_total!=null ? Number(r.qty_total) : null,
@@ -575,18 +620,42 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   });
 });
 
-/* ---------- WEEK NAV ---------- */
+/* ---------- PERIOD NAV ---------- */
 document.getElementById('prevWeek').addEventListener('click', ()=>{
-  currentWeekStart = addDays(currentWeekStart, -7); renderAll();
+  if(periodMode==='day') currentAnchor = addDays(currentAnchor, -1);
+  else if(periodMode==='month') currentAnchor = addMonths(currentAnchor, -1);
+  else currentAnchor = addDays(currentAnchor, -7);
+  renderAll();
 });
 document.getElementById('nextWeek').addEventListener('click', ()=>{
-  currentWeekStart = addDays(currentWeekStart, 7); renderAll();
+  if(periodMode==='day') currentAnchor = addDays(currentAnchor, 1);
+  else if(periodMode==='month') currentAnchor = addMonths(currentAnchor, 1);
+  else currentAnchor = addDays(currentAnchor, 7);
+  renderAll();
+});
+document.querySelectorAll('.period-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    periodMode = btn.dataset.period;
+    document.querySelectorAll('.period-btn').forEach(b=>b.classList.toggle('active', b===btn));
+    renderAll();
+  });
 });
 
 function renderWeekRange(){
-  const end = addDays(currentWeekStart, 6);
-  document.getElementById('weekRange').textContent = fmtDisplay(currentWeekStart)+' – '+fmtDisplay(end);
-  document.getElementById('rangeLabel1').textContent = '('+fmtDisplay(currentWeekStart)+'–'+fmtDisplay(end)+')';
+  const { start, end } = getPeriodRange();
+  let rangeText, labelText;
+  if(periodMode==='day'){
+    rangeText = fmtDisplay(start);
+    labelText = '('+fmtDisplay(start)+')';
+  }else if(periodMode==='month'){
+    rangeText = fmtDisplayMonth(start);
+    labelText = '('+fmtDisplayMonth(start)+')';
+  }else{
+    rangeText = fmtDisplay(start)+' – '+fmtDisplay(end);
+    labelText = '('+fmtDisplay(start)+'–'+fmtDisplay(end)+')';
+  }
+  document.getElementById('weekRange').textContent = rangeText;
+  document.getElementById('rangeLabel1').textContent = labelText;
 }
 
 /* ---------- SELECT POPULATION ---------- */
@@ -614,6 +683,13 @@ function refreshFormSelects(){
   populateSelect(document.getElementById('filt-qc'), master.qc, 'Semua QC');
 }
 
+function refreshProjectOptions(){
+  const projects = Array.from(new Set(entries.map(e=>e.projectNumber).filter(Boolean))).sort();
+  document.getElementById('projectList').innerHTML = projects.map(p=>`<option value="${esc(p)}">`).join('');
+  const filtProject = document.getElementById('filt-project');
+  if(filtProject) populateSelect(filtProject, projects, 'Semua Project');
+}
+
 /* ---------- ENTRY FORM ---------- */
 document.getElementById('f-date').value = fmt(new Date());
 
@@ -630,6 +706,7 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
 
   const base = {
     date: document.getElementById('f-date').value,
+    projectNumber: document.getElementById('f-project').value.trim(),
     shift: document.getElementById('f-shift').value,
     machine: document.getElementById('f-machine').value,
     operator: document.getElementById('f-operator').value,
@@ -686,7 +763,7 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   }
 
   const payload = {
-    date: base.date, shift: base.shift, machine: base.machine,
+    date: base.date, project_number: base.projectNumber, shift: base.shift, machine: base.machine,
     operator: base.operator, qc: base.qc, problem_type: base.problemType,
     downtime: base.downtime, description: base.desc,
     photo_problem_url: photoProblemUrl, photo_nc_url: photoNcUrl,
@@ -710,7 +787,7 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   }
 
   const localEntry = {
-    id: entryId, date: base.date, shift: base.shift, machine: base.machine,
+    id: entryId, date: base.date, projectNumber: base.projectNumber, shift: base.shift, machine: base.machine,
     operator: base.operator, qc: base.qc, problemType: base.problemType,
     downtime: base.downtime, desc: base.desc,
     photoProblem: photoProblemUrl, photoNc: photoNcUrl, pallets: pallets,
@@ -893,6 +970,7 @@ function startEdit(entry){
   editingExistingPhotoNc = entry.photoNc || '';
 
   document.getElementById('f-date').value = entry.date || '';
+  document.getElementById('f-project').value = entry.projectNumber || '';
   document.getElementById('f-shift').value = entry.shift || '';
   document.getElementById('f-machine').value = entry.machine || '';
   document.getElementById('f-operator').value = entry.operator || '';
@@ -1003,9 +1081,9 @@ function renderGallery(){
 
 /* ---------- RINGKASAN (WEEKLY SUMMARY) ---------- */
 function weekEntries(){
-  const start = fmt(currentWeekStart);
-  const end = fmt(addDays(currentWeekStart,6));
-  return entries.filter(e => e.date >= start && e.date <= end);
+  const { start, end } = getPeriodRange();
+  const s = fmt(start), e = fmt(end);
+  return entries.filter(x => x.date >= s && x.date <= e);
 }
 
 function countBy(list, key){
@@ -1014,12 +1092,20 @@ function countBy(list, key){
   return Object.entries(m).sort((a,b)=>b[1]-a[1]);
 }
 
+function periodLabelWord(){
+  if(periodMode==='day') return 'hari ini';
+  if(periodMode==='month') return 'bulan ini';
+  return 'minggu ini';
+}
+
 function renderRingkasan(){
   const wk = weekEntries();
   const byMachine = countBy(wk,'machine');
   const byOperator = countBy(wk,'operator');
   const byQc = countBy(wk,'qc');
   const byProblem = countBy(wk,'problemType');
+  const byProject = countBy(wk,'projectNumber');
+  const plabel = periodLabelWord();
 
   const topMachine = byMachine[0];
   const topOperator = byOperator[0];
@@ -1027,7 +1113,7 @@ function renderRingkasan(){
   const totalDowntime = wk.reduce((s,e)=> s + (parseInt(e.downtime)||0), 0);
 
   const kpis = [
-    {label:'Total Problem Minggu Ini', value: wk.length, sub: wk.length===0?'Tidak ada data':'entri tercatat', cls:''},
+    {label:'Total Problem '+(periodMode==='day'?'Hari Ini':periodMode==='month'?'Bulan Ini':'Minggu Ini'), value: wk.length, sub: wk.length===0?'Tidak ada data':'entri tercatat', cls:''},
     {label:'Mesin Paling Bermasalah', value: topMachine?topMachine[0]:'—', sub: topMachine?topMachine[1]+' problem':'', cls:'red'},
     {label:'Operator Paling Sering Terkait', value: topOperator?topOperator[0]:'—', sub: topOperator?topOperator[1]+' problem':'', cls:''},
     {label:'QC Paling Sering Terkait', value: topQc?topQc[0]:'—', sub: topQc?topQc[1]+' problem':'', cls:'green'},
@@ -1044,11 +1130,13 @@ function renderRingkasan(){
   const totalQtyOk = totalQtyProduction - totalRejectQty;
   const overallRejectPct = totalQtyProduction > 0 ? (totalRejectQty/totalQtyProduction*100) : 0;
   const rejectKpis = [
-    {label:'Total Qty Production', value: totalQtyProduction.toLocaleString('id-ID'), sub:'unit minggu ini', cls:''},
+    {label:'Total Qty Production', value: totalQtyProduction.toLocaleString('id-ID'), sub:'unit '+plabel, cls:''},
     {label:'Total Reject', value: totalRejectQty.toLocaleString('id-ID'), sub:'unit reject', cls:'red'},
     {label:'Qty Total (OK)', value: totalQtyOk.toLocaleString('id-ID'), sub:'production − reject', cls:'green'},
     {label:'% Reject', value: overallRejectPct.toFixed(2)+'%', sub:'dari total production', cls: overallRejectPct>5?'red':''},
   ];
+  document.getElementById('rejectPanelLabel').textContent =
+    periodMode==='day' ? 'Hari Ini' : periodMode==='month' ? 'Bulan Ini' : 'Minggu Ini';
   document.getElementById('rejectKpiGrid').innerHTML = rejectKpis.map(k=>`
     <div class="kpi ${k.cls}">
       <div class="kpi-label">${k.label}</div>
@@ -1058,6 +1146,7 @@ function renderRingkasan(){
 
   renderBarList('barMachine', byMachine);
   renderBarList('barProblem', byProblem.slice(0,8));
+  renderBarList('barProject', byProject.slice(0,8));
   renderRecentPhotos();
 }
 
@@ -1077,12 +1166,14 @@ function renderBarList(elId, pairs){
 function getFilteredEntries(){
   const from = document.getElementById('filt-from').value;
   const to = document.getElementById('filt-to').value;
+  const fp = document.getElementById('filt-project').value;
   const fm = document.getElementById('filt-machine').value;
   const fo = document.getElementById('filt-operator').value;
   const fq = document.getElementById('filt-qc').value;
   let list = entries.slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.id>a.id?1:-1));
   if(from) list = list.filter(e=>e.date>=from);
   if(to) list = list.filter(e=>e.date<=to);
+  if(fp) list = list.filter(e=>e.projectNumber===fp);
   if(fm) list = list.filter(e=>e.machine===fm);
   if(fo) list = list.filter(e=>e.operator===fo);
   if(fq) list = list.filter(e=>e.qc===fq);
@@ -1094,12 +1185,13 @@ function renderDataTable(){
 
   const tbody = document.getElementById('dataTableBody');
   if(list.length===0){
-    tbody.innerHTML = '<tr><td colspan="14" class="empty">Tidak ada data yang cocok.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="empty">Tidak ada data yang cocok.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map(e=>`
     <tr>
       <td class="mono">${esc(e.date)}</td>
+      <td class="mono">${esc(e.projectNumber||'-')}</td>
       <td>${esc(e.shift||'-')}</td>
       <td><span class="mtag">${esc(e.machine)}</span></td>
       <td class="mono">${(e.pallets&&e.pallets.length) ? esc(e.pallets.map(p=>p.number||'-').join(', ')) : '-'}</td>
@@ -1135,21 +1227,21 @@ function renderDataTable(){
     });
   });
 }
-['filt-from','filt-to','filt-machine','filt-operator','filt-qc'].forEach(id=>{
+['filt-from','filt-to','filt-project','filt-machine','filt-operator','filt-qc'].forEach(id=>{
   document.getElementById(id).addEventListener('change', renderDataTable);
 });
 document.getElementById('clearFilters').addEventListener('click', ()=>{
-  ['filt-from','filt-to','filt-machine','filt-operator','filt-qc'].forEach(id=>document.getElementById(id).value='');
+  ['filt-from','filt-to','filt-project','filt-machine','filt-operator','filt-qc'].forEach(id=>document.getElementById(id).value='');
   renderDataTable();
 });
 document.getElementById('exportCsv').addEventListener('click', ()=>{
   const list = getFilteredEntries().slice().sort((a,b)=>a.date.localeCompare(b.date));
-  const rows = [['Tanggal','Shift','Mesin','Nomor Palet','Operator','QC','Jenis Problem','Deskripsi','Qty Production','Total Reject','Qty Total','% Reject','Downtime (menit)','Foto Problem','Foto NC','Foto Label Palet (semua)']];
+  const rows = [['Tanggal','Nomor Project','Shift','Mesin','Nomor Palet','Operator','QC','Jenis Problem','Deskripsi','Qty Production','Total Reject','Qty Total','% Reject','Downtime (menit)','Foto Problem','Foto NC','Foto Label Palet (semua)']];
   list.forEach(e=>{
     const pallets = e.pallets||[];
     const palletNumbers = pallets.map(p=>p.number).filter(Boolean).join(' | ');
     const palletPhotos = pallets.map(p=>p.photo).filter(Boolean).join(' | ');
-    rows.push([e.date,e.shift,e.machine,palletNumbers,e.operator,e.qc,e.problemType,e.desc,
+    rows.push([e.date,e.projectNumber,e.shift,e.machine,palletNumbers,e.operator,e.qc,e.problemType,e.desc,
       e.qtyProduction,e.totalReject,e.qtyTotal,e.rejectPercentage!=null?e.rejectPercentage.toFixed(2)+'%':'',
       e.downtime,e.photoProblem,e.photoNc,palletPhotos]);
   });
@@ -1195,6 +1287,7 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
     const ws = wb.addWorksheet('Data Problem', { views:[{ state:'frozen', ySplit:1 }] });
     const columnDefs = [
       { name:'Tanggal', width:13 },
+      { name:'Nomor Project', width:16 },
       { name:'Shift', width:10 },
       { name:'Mesin', width:14 },
       { name:'Nomor Palet', width:14 },
@@ -1217,7 +1310,7 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
       const pallets = e.pallets||[];
       const palletNumbers = pallets.map(p=>p.number).filter(Boolean).join(', ') || '-';
       return [
-        e.date, e.shift||'-', e.machine, palletNumbers, e.operator, e.qc, e.problemType, e.desc,
+        e.date, e.projectNumber||'-', e.shift||'-', e.machine, palletNumbers, e.operator, e.qc, e.problemType, e.desc,
         e.qtyProduction!=null ? e.qtyProduction : null,
         e.totalReject!=null ? e.totalReject : null,
         e.qtyTotal!=null ? e.qtyTotal : null,
@@ -1238,15 +1331,15 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
 
     ws.getRow(1).font = { bold:true, color:{ argb:'FFFFFFFF' } };
     ws.getRow(1).alignment = { vertical:'middle' };
-    ws.getColumn(8).alignment = { wrapText:true, vertical:'top' };
-    ws.getColumn(12).numFmt = '0.00"%"';
+    ws.getColumn(9).alignment = { wrapText:true, vertical:'top' };
+    ws.getColumn(13).numFmt = '0.00"%"';
 
     // Ambil dan sisipkan foto langsung ke dalam sel (kolom Foto Problem, Foto NC)
     const photoCols = [
-      { key:'photoProblem', colIndex: 13 },
-      { key:'photoNc', colIndex: 14 }
+      { key:'photoProblem', colIndex: 14 },
+      { key:'photoNc', colIndex: 15 }
     ];
-    const PALLET_PHOTO_COL = 15; // kolom "Foto Label Palet" (nol-basis)
+    const PALLET_PHOTO_COL = 16; // kolom "Foto Label Palet" (nol-basis)
     let done = 0;
     const totalPhotos = list.reduce((n,e)=> n + photoCols.filter(pc=>e[pc.key]).length + Math.min(1,(e.pallets||[]).filter(p=>p.photo).length), 0);
 
@@ -1344,6 +1437,7 @@ document.querySelectorAll('[data-add]').forEach(btn=>{
 function renderAll(){
   renderWeekRange();
   renderRingkasan();
+  refreshProjectOptions();
 }
 
 async function init(){
