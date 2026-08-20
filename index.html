@@ -261,8 +261,14 @@ tr:hover td{background:var(--panel-2);}
 .hot-row.rank-2 .hot-rank{color:#e0703d;}
 .hot-row.rank-3 .hot-rank{color:var(--amber);}
 .hot-info{flex:1;min-width:0;}
-.hot-name{font-size:13px;font-weight:600;margin-bottom:5px;display:flex;align-items:center;gap:6px;}
+.hot-name{font-size:13px;font-weight:600;margin-bottom:3px;display:flex;align-items:center;gap:6px;}
+.hot-sub{font-size:10.5px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;margin-bottom:5px;}
 .hot-fire{font-size:12px;}
+.hot-thumb{width:40px;height:40px;border-radius:4px;object-fit:cover;flex-shrink:0;cursor:zoom-in;border:1px solid var(--line);}
+.hot-thumb-empty{
+  display:flex;align-items:center;justify-content:center;background:var(--panel);color:var(--text-dim);
+  font-size:9px;font-family:'IBM Plex Mono',monospace;cursor:default;
+}
 .hot-bar-wrap{height:6px;background:var(--line);border-radius:3px;overflow:hidden;}
 .hot-bar{height:100%;background:linear-gradient(90deg,var(--red),var(--amber));border-radius:3px;}
 .hot-stats{text-align:right;flex-shrink:0;}
@@ -1179,44 +1185,44 @@ function renderRingkasan(){
 
 function renderHotlistReject(wk){
   const box = document.getElementById('hotlistReject');
-  const byMachineAgg = {};
-  wk.forEach(e=>{
-    if(!e.machine) return;
-    if(!byMachineAgg[e.machine]) byMachineAgg[e.machine] = { qtyProduction:0, totalReject:0 };
-    byMachineAgg[e.machine].qtyProduction += (e.qtyProduction||0);
-    byMachineAgg[e.machine].totalReject += (e.totalReject||0);
-  });
-  const ranked = Object.entries(byMachineAgg)
-    .filter(([,v])=> v.totalReject > 0)
-    .map(([machine,v])=>({
-      machine, totalReject: v.totalReject, qtyProduction: v.qtyProduction,
-      pct: v.qtyProduction>0 ? (v.totalReject/v.qtyProduction*100) : 0
+  const ranked = wk
+    .filter(e => e.qtyProduction!=null && e.qtyProduction>0 && e.totalReject!=null && e.totalReject>0)
+    .map(e => ({
+      entry: e,
+      pct: e.rejectPercentage!=null ? e.rejectPercentage : (e.totalReject/e.qtyProduction*100)
     }))
-    .sort((a,b)=> b.totalReject - a.totalReject)
+    .sort((a,b)=> b.pct - a.pct)
     .slice(0,5);
 
   if(ranked.length===0){
     box.innerHTML = '<div class="empty">Belum ada data reject pada periode ini.</div>';
     return;
   }
-  const maxReject = ranked[0].totalReject;
+  const maxPct = ranked[0].pct;
   box.innerHTML = ranked.map((r,i)=>{
+    const e = r.entry;
     const rank = i+1;
     const rankCls = rank<=3 ? 'rank-'+rank : '';
-    const barPct = maxReject>0 ? Math.round((r.totalReject/maxReject)*100) : 0;
+    const barPct = maxPct>0 ? Math.round((r.pct/maxPct)*100) : 0;
     const fire = rank===1 ? '🔥🔥🔥' : rank===2 ? '🔥🔥' : rank===3 ? '🔥' : '';
+    const thumb = e.photoNc
+      ? `<img class="hot-thumb" src="${esc(e.photoNc)}" data-lightbox="${esc(e.photoNc)}" alt="Foto NC">`
+      : `<div class="hot-thumb hot-thumb-empty">NC</div>`;
     return `<div class="hot-row ${rankCls}">
       <div class="hot-rank">#${rank}</div>
+      ${thumb}
       <div class="hot-info">
-        <div class="hot-name">${esc(r.machine)} ${fire?'<span class="hot-fire">'+fire+'</span>':''}</div>
+        <div class="hot-name">${esc(e.machine)} · ${esc(e.problemType)} ${fire?'<span class="hot-fire">'+fire+'</span>':''}</div>
+        <div class="hot-sub">${esc(e.date)}${e.projectNumber?' · '+esc(e.projectNumber):''}</div>
         <div class="hot-bar-wrap"><div class="hot-bar" style="width:${barPct}%;"></div></div>
       </div>
       <div class="hot-stats">
-        <div class="hot-reject">${r.totalReject.toLocaleString('id-ID')} reject</div>
-        <div class="hot-pct">${r.pct.toFixed(2)}% dari produksi</div>
+        <div class="hot-reject">${r.pct.toFixed(2)}%</div>
+        <div class="hot-pct">${e.totalReject.toLocaleString('id-ID')} / ${e.qtyProduction.toLocaleString('id-ID')} unit</div>
       </div>
     </div>`;
   }).join('');
+  bindLightboxTriggers(box);
 }
 
 function renderBarList(elId, pairs){
