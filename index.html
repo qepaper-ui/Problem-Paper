@@ -243,6 +243,31 @@ tr:hover td{background:var(--panel-2);}
 .period-btn.active{background:var(--amber);color:#1a1300;}
 .project-summary-row{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
 .project-summary-row select{width:auto;min-width:200px;}
+
+/* hot list reject terbesar */
+.hotlist{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+.hot-row{
+  display:flex;align-items:center;gap:12px;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:6px;padding:10px 12px;
+}
+.hot-row.rank-1{border-color:var(--red);background:linear-gradient(90deg, rgba(209,77,77,.18), transparent 70%);}
+.hot-row.rank-2{border-color:#e0703d;background:linear-gradient(90deg, rgba(224,112,61,.14), transparent 70%);}
+.hot-row.rank-3{border-color:var(--amber);background:linear-gradient(90deg, rgba(232,163,61,.12), transparent 70%);}
+.hot-rank{
+  font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:14px;width:30px;text-align:center;
+  color:var(--text-dim);flex-shrink:0;
+}
+.hot-row.rank-1 .hot-rank{color:var(--red);font-size:16px;}
+.hot-row.rank-2 .hot-rank{color:#e0703d;}
+.hot-row.rank-3 .hot-rank{color:var(--amber);}
+.hot-info{flex:1;min-width:0;}
+.hot-name{font-size:13px;font-weight:600;margin-bottom:5px;display:flex;align-items:center;gap:6px;}
+.hot-fire{font-size:12px;}
+.hot-bar-wrap{height:6px;background:var(--line);border-radius:3px;overflow:hidden;}
+.hot-bar{height:100%;background:linear-gradient(90deg,var(--red),var(--amber));border-radius:3px;}
+.hot-stats{text-align:right;flex-shrink:0;}
+.hot-reject{font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:var(--red);font-weight:700;}
+.hot-pct{font-size:11px;color:var(--text-dim);}
 </style>
 </head>
 <body>
@@ -285,8 +310,9 @@ tr:hover td{background:var(--panel-2);}
       <div class="barlist" id="barMachine"></div>
     </div>
     <div class="panel">
-      <h2>Ringkasan Produksi &amp; Reject <span id="rejectPanelLabel">Minggu Ini</span></h2>
+      <h2>🔥 Hot List — Reject Terbesar <span id="rejectPanelLabel">Minggu Ini</span></h2>
       <div class="kpi-grid" id="rejectKpiGrid" style="margin-bottom:0;"></div>
+      <div class="hotlist" id="hotlistReject"></div>
     </div>
     <div class="panel">
       <h2>Jenis Problem Paling Sering</h2>
@@ -1144,10 +1170,53 @@ function renderRingkasan(){
       <div class="kpi-sub">${esc(k.sub)}</div>
     </div>`).join('');
 
+  renderHotlistReject(wk);
   renderBarList('barMachine', byMachine);
   renderBarList('barProblem', byProblem.slice(0,8));
   renderBarList('barProject', byProject.slice(0,8));
   renderRecentPhotos();
+}
+
+function renderHotlistReject(wk){
+  const box = document.getElementById('hotlistReject');
+  const byMachineAgg = {};
+  wk.forEach(e=>{
+    if(!e.machine) return;
+    if(!byMachineAgg[e.machine]) byMachineAgg[e.machine] = { qtyProduction:0, totalReject:0 };
+    byMachineAgg[e.machine].qtyProduction += (e.qtyProduction||0);
+    byMachineAgg[e.machine].totalReject += (e.totalReject||0);
+  });
+  const ranked = Object.entries(byMachineAgg)
+    .filter(([,v])=> v.totalReject > 0)
+    .map(([machine,v])=>({
+      machine, totalReject: v.totalReject, qtyProduction: v.qtyProduction,
+      pct: v.qtyProduction>0 ? (v.totalReject/v.qtyProduction*100) : 0
+    }))
+    .sort((a,b)=> b.totalReject - a.totalReject)
+    .slice(0,5);
+
+  if(ranked.length===0){
+    box.innerHTML = '<div class="empty">Belum ada data reject pada periode ini.</div>';
+    return;
+  }
+  const maxReject = ranked[0].totalReject;
+  box.innerHTML = ranked.map((r,i)=>{
+    const rank = i+1;
+    const rankCls = rank<=3 ? 'rank-'+rank : '';
+    const barPct = maxReject>0 ? Math.round((r.totalReject/maxReject)*100) : 0;
+    const fire = rank===1 ? '🔥🔥🔥' : rank===2 ? '🔥🔥' : rank===3 ? '🔥' : '';
+    return `<div class="hot-row ${rankCls}">
+      <div class="hot-rank">#${rank}</div>
+      <div class="hot-info">
+        <div class="hot-name">${esc(r.machine)} ${fire?'<span class="hot-fire">'+fire+'</span>':''}</div>
+        <div class="hot-bar-wrap"><div class="hot-bar" style="width:${barPct}%;"></div></div>
+      </div>
+      <div class="hot-stats">
+        <div class="hot-reject">${r.totalReject.toLocaleString('id-ID')} reject</div>
+        <div class="hot-pct">${r.pct.toFixed(2)}% dari produksi</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderBarList(elId, pairs){
