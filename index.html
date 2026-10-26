@@ -2,7 +2,8 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#3ba7c9">
 <title>Panel Problem Produksi</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
@@ -462,9 +463,152 @@ tr.high-reject td.mono.pct-cell{ color:var(--red); font-weight:800; }
 .ringkasan-filter select{ width:auto; min-width:240px; }
 .ringkasan-filter .info{ color:var(--text-dim); font-size:12px; font-weight:600; }
 .ringkasan-filter .spacer{ flex:1; }
+
+/* ================= LOGIN ================= */
+body.locked .sidebar, body.locked header.top, body.locked main{ display:none !important; }
+.login-overlay{
+  position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+  padding:16px; overflow:auto; min-height:100vh; min-height:100dvh;
+}
+.login-card{
+  width:min(400px,100%); background:#fff; border-radius:24px; padding:32px 28px 26px;
+  box-shadow:0 20px 60px rgba(43,58,85,.18); text-align:center;
+}
+.login-logo{
+  width:64px; height:64px; border-radius:20px; margin:0 auto 14px; font-size:32px;
+  background:linear-gradient(135deg,var(--sidebar),var(--sidebar-2));
+  display:flex; align-items:center; justify-content:center; box-shadow:0 8px 20px rgba(59,167,201,.35);
+}
+.login-card h1{ margin:0 0 4px; font-size:20px; font-weight:800; color:var(--text); }
+.login-sub{ margin:0 0 22px; font-size:13px; color:var(--text-dim); font-weight:600; }
+.login-card label{ display:block; text-align:left; font-size:12px; font-weight:700; color:var(--text-dim); margin:0 0 6px; }
+.login-card input{
+  width:100%; padding:12px 14px; border:1.5px solid var(--line-2); border-radius:12px; background:var(--card-soft);
+  font-family:'Nunito',sans-serif; font-size:16px; font-weight:600; color:var(--text); margin:0 0 14px; outline:none;
+}
+.login-card input:focus{ border-color:var(--blue); box-shadow:0 0 0 3px var(--blue-soft); background:#fff; }
+.pw-wrap{ position:relative; }
+.pw-wrap input{ padding-right:46px; }
+.pw-wrap button{
+  position:absolute; right:6px; top:4px; width:38px; height:38px; border:none; background:transparent;
+  cursor:pointer; font-size:17px; border-radius:10px; opacity:.7;
+}
+.pw-wrap button:hover{ opacity:1; background:var(--blue-soft); }
+.login-error{
+  background:var(--red-soft); color:#c0394f; font-size:12.5px; font-weight:700; border-radius:10px;
+  padding:9px 12px; margin:0 0 14px; text-align:left;
+}
+.login-btn{
+  width:100%; border:none; border-radius:12px; padding:13px; font-family:'Nunito',sans-serif; font-size:15px;
+  font-weight:800; color:#fff; background:var(--blue); cursor:pointer; box-shadow:0 8px 18px rgba(74,159,224,.35);
+  transition:transform .15s, opacity .15s;
+}
+.login-btn:hover{ transform:translateY(-1px); }
+.login-btn:disabled{ opacity:.6; cursor:wait; transform:none; }
+.login-foot{ margin-top:16px; font-size:11.5px; color:var(--text-soft); font-weight:600; }
+
+/* ================= BUNGA & LEBAH ================= */
+#garden{
+  position:fixed; left:0; right:0; bottom:0; height:125px; z-index:30; pointer-events:none; overflow:hidden;
+}
+.flower{ position:absolute; bottom:-4px; transform-origin:50% 100%; animation:sway 4.5s ease-in-out infinite alternate; }
+.flower svg{ display:block; width:100%; height:100%; overflow:visible; }
+.flower .head{ transform-box:fill-box; transform-origin:center; animation:bloom 6s ease-in-out infinite alternate; }
+@keyframes sway{ from{ transform:rotate(-4deg); } to{ transform:rotate(4deg); } }
+@keyframes bloom{ from{ transform:scale(.94) rotate(-6deg); } to{ transform:scale(1.05) rotate(6deg); } }
+#bees{ position:fixed; inset:0; z-index:55; pointer-events:none; overflow:hidden; }
+.bee{ position:absolute; left:0; top:0; width:38px; height:29px; will-change:transform; filter:drop-shadow(0 4px 3px rgba(0,0,0,.16)); }
+.bee svg{ display:block; width:100%; height:100%; overflow:visible; }
+.bee .wing{ transform-box:fill-box; transform-origin:50% 100%; animation:flap .11s ease-in-out infinite alternate; }
+.bee .wing.w2{ animation-delay:.05s; }
+@keyframes flap{ from{ transform:rotate(-16deg) scaleY(1); } to{ transform:rotate(12deg) scaleY(.75); } }
+body.garden-off #garden, body.garden-off #bees{ display:none; }
+#btnGarden{ opacity:.9; }
+body.garden-off #btnGarden{ opacity:.45; }
+@media (prefers-reduced-motion:reduce){
+  .flower, .flower .head, .bee .wing{ animation:none !important; }
+}
+main{ padding-bottom:140px; }
+
+/* ================= RESPONSIVE ================= */
+html{ -webkit-text-size-adjust:100%; }
+img,canvas,svg{ max-width:100%; }
+canvas{ height:auto; }
+@media(max-width:900px){
+  .form-grid[style*="1fr 1fr 1fr 1fr"], .form-grid[style*="repeat(4"]{ grid-template-columns:1fr 1fr !important; }
+  .top-inner{ padding:14px 18px 8px; }
+  nav.tabs{ padding:0 18px 12px; }
+  main{ padding-right:18px; }
+}
+@media(max-width:700px){
+  /* sidebar -> bar navigasi bawah */
+  .sidebar{
+    top:auto; right:0; width:100%; height:calc(62px + env(safe-area-inset-bottom));
+    flex-direction:row; justify-content:flex-start; gap:4px; border-radius:20px 20px 0 0;
+    padding:9px 10px calc(9px + env(safe-area-inset-bottom)); overflow-x:auto; overflow-y:hidden;
+    box-shadow:0 -6px 24px rgba(59,167,201,.25);
+  }
+  .sidebar .sb-brand{ display:none; }
+  .sidebar .sb-btn{ flex:0 0 42px; width:42px; height:42px; font-size:18px; }
+  .sidebar .sb-spacer{ flex:1 0 6px; }
+  header.top{ margin-left:0; }
+  .top-inner{ padding:12px 14px 6px; gap:10px; }
+  .brand .title-brand{ font-size:14.5px; }
+  .week-nav{ width:100%; gap:8px; }
+  .period-toggle{ margin-right:0; width:100%; }
+  .period-btn{ flex:1; padding:7px 4px; }
+  .week-range{ min-width:0; flex:1; }
+  .custom-range{ margin-left:0; width:100%; flex-wrap:wrap; }
+  .custom-range input[type=date]{ flex:1; min-width:130px; }
+  nav.tabs{ display:none; }
+  main{ padding:6px 12px calc(190px + env(safe-area-inset-bottom)) 12px; }
+  .panel{ padding:16px 14px; border-radius:18px; overflow-x:auto; }
+  .kpi-grid, .dash-grid .kpi-grid{ gap:10px; }
+  .barrow{ grid-template-columns:84px 1fr 36px; gap:8px; }
+  .form-grid{ grid-template-columns:1fr !important; }
+  input, select, textarea{ font-size:16px !important; }   /* cegah auto-zoom di iPhone */
+  .btn{ min-height:40px; }
+  .ringkasan-filter select, .project-summary-row select, .filters select, .filters input{ width:100%; min-width:0; }
+  .master-cols{ grid-template-columns:1fr; }
+  .plog-summary{ grid-template-columns:22px 52px 1fr auto; gap:8px; padding:10px; }
+  .plog-summary-meta{ display:none; }
+  .pl-cmp-grid, .pl-proc-grid.pl-wide, .pl-cmp-cols{ grid-template-columns:1fr; }
+  .gallery-grid{ grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+  .lightbox{ padding:12px; }
+  .toast{ left:12px; right:12px; bottom:calc(76px + env(safe-area-inset-bottom)); text-align:center; }
+  #garden{ bottom:calc(62px + env(safe-area-inset-bottom)); height:95px; }
+  .login-card{ padding:26px 20px 22px; }
+}
+@media(min-width:1700px){
+  .top-inner, nav.tabs, main{ max-width:1560px; }
+}
+
 </style>
 </head>
-<body>
+<body class="locked">
+
+<!-- BUNGA & LEBAH -->
+<div id="garden" aria-hidden="true"></div>
+<div id="bees" aria-hidden="true"></div>
+
+<!-- LOGIN -->
+<div id="loginOverlay" class="login-overlay">
+  <form id="loginForm" class="login-card" novalidate>
+    <div class="login-logo">🏭</div>
+    <h1>Panel Problem Produksi</h1>
+    <p class="login-sub">Silakan masuk untuk melanjutkan</p>
+    <label for="loginEmail">Email</label>
+    <input id="loginEmail" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="nama@perusahaan.com" required>
+    <label for="loginPass">Password</label>
+    <div class="pw-wrap">
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="Password" required>
+      <button type="button" id="pwToggle" aria-label="Tampilkan password" title="Tampilkan / sembunyikan">👁</button>
+    </div>
+    <div id="loginError" class="login-error hidden" role="alert"></div>
+    <button type="submit" class="login-btn" id="loginBtn">Masuk</button>
+    <div class="login-foot">Akses hanya untuk pengguna terdaftar</div>
+  </form>
+</div>
 
 <!-- SIDEBAR -->
 <aside class="sidebar">
@@ -478,7 +622,8 @@ tr.high-reject td.mono.pct-cell{ color:var(--red); font-weight:800; }
   <button class="sb-btn" data-tab="data" title="Data Lengkap">🗂️</button>
   <button class="sb-btn" data-tab="master" title="Master Data">⚙️</button>
   <div class="sb-spacer"></div>
-  <button class="sb-btn sb-exit" title="Keluar">⏻</button>
+  <button class="sb-btn" id="btnGarden" title="Bunga &amp; lebah: hidup / mati">🐝</button>
+  <button class="sb-btn sb-exit" id="btnLogout" title="Keluar">⏻</button>
 </aside>
 
 <header class="top">
@@ -2774,7 +2919,190 @@ async function init(){
   renderAll(); renderGallery();
   document.getElementById('plog-date').value = fmt(new Date());
 }
-init();
+
+/* ============ LOGIN (Supabase Auth) ============ */
+let appStarted = false;
+const $login = id => document.getElementById(id);
+
+async function enterApp(){
+  if(appStarted) return;
+  appStarted = true;
+  $login('loginOverlay').classList.add('hidden');
+  document.body.classList.remove('locked');
+  await init();
+}
+function showLoginError(msg){
+  const el = $login('loginError'); el.textContent = msg; el.classList.toggle('hidden', !msg);
+}
+function loginMessage(err){
+  const m = (err && err.message || '').toLowerCase();
+  if(m.includes('invalid login')) return 'Email atau password salah.';
+  if(m.includes('email not confirmed')) return 'Email belum dikonfirmasi. Hubungi admin.';
+  if(m.includes('too many') || m.includes('rate limit')) return 'Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.';
+  if(m.includes('fetch') || m.includes('network')) return 'Tidak bisa terhubung ke server. Periksa koneksi internet.';
+  return 'Gagal masuk: ' + (err && err.message ? err.message : 'terjadi kesalahan.');
+}
+$login('pwToggle').addEventListener('click', ()=>{
+  const i = $login('loginPass'); i.type = i.type === 'password' ? 'text' : 'password';
+});
+$login('loginForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  showLoginError('');
+  if(!sb){ showLoginError('Koneksi Supabase belum dikonfigurasi.'); return; }
+  const email = $login('loginEmail').value.trim();
+  const password = $login('loginPass').value;
+  if(!email || !password){ showLoginError('Isi email dan password.'); return; }
+  const btn = $login('loginBtn'); btn.disabled = true; btn.textContent = 'Memproses…';
+  try{
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    $login('loginPass').value = '';
+    await enterApp();
+  }catch(err){
+    showLoginError(loginMessage(err));
+  }finally{
+    btn.disabled = false; btn.textContent = 'Masuk';
+  }
+});
+$login('btnLogout').addEventListener('click', async ()=>{
+  if(!confirm('Keluar dari aplikasi?')) return;
+  try{ if(sb) await sb.auth.signOut(); }catch(err){ console.error(err); }
+  location.reload();   // bersihkan semua data dari memori halaman
+});
+async function bootAuth(){
+  if(!sb){ showLoginError('Koneksi Supabase belum dikonfigurasi.'); return; }
+  try{
+    const { data } = await sb.auth.getSession();
+    if(data && data.session){ await enterApp(); }
+    else { $login('loginEmail').focus(); }
+  }catch(err){ console.error(err); showLoginError('Gagal memeriksa sesi login.'); }
+  sb.auth.onAuthStateChange((event)=>{
+    if(event === 'SIGNED_OUT' && appStarted) location.reload();   // mis. logout dari tab lain / sesi habis
+  });
+}
+bootAuth();
+</script>
+
+<script>
+/* ============ BUNGA & LEBAH BERGERAK ============ */
+(function(){
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const garden = document.getElementById('garden');
+  const beeLayer = document.getElementById('bees');
+  const PALETTE = [['#f07fb0','#fce4ee'],['#f6b73c','#fdf1da'],['#9b7ff0','#efe9fd'],['#ffffff','#e8eef2'],['#f0687c','#fde3e8'],['#4a9fe0','#e3f1fb']];
+  const rnd = (a,b)=> a + Math.random()*(b-a);
+  let off = false; try{ off = localStorage.getItem('garden') === 'off'; }catch(e){}
+  if(off) document.body.classList.add('garden-off');
+
+  function flowerSVG(petal, center){
+    let p = '';
+    for(let i=0;i<8;i++) p += `<ellipse cx="50" cy="27" rx="9.5" ry="17" fill="${petal}" stroke="rgba(43,58,85,.12)" stroke-width=".8" transform="rotate(${i*45} 50 50)"/>`;
+    return `<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg">
+      <path d="M50 52 C46 100 54 150 50 200" stroke="#4ecb8e" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <ellipse cx="36" cy="135" rx="15" ry="6" fill="#4ecb8e" transform="rotate(-30 36 135)"/>
+      <ellipse cx="65" cy="158" rx="15" ry="6" fill="#43b97f" transform="rotate(28 65 158)"/>
+      <g class="head">${p}<circle cx="50" cy="50" r="9.5" fill="${center}"/><circle cx="50" cy="50" r="9.5" fill="none" stroke="rgba(43,58,85,.18)" stroke-width="1"/></g>
+    </svg>`;
+  }
+  function buildFlowers(){
+    garden.innerHTML = '';
+    const W = window.innerWidth;
+    const count = Math.max(5, Math.min(18, Math.round(W / 95)));
+    for(let i=0;i<count;i++){
+      const size = Math.round(rnd(38, 58));
+      const [petal] = PALETTE[Math.floor(Math.random()*PALETTE.length)];
+      const center = petal === '#f6b73c' ? '#e8742c' : '#f6b73c';
+      const el = document.createElement('div');
+      el.className = 'flower';
+      el.style.width = size + 'px'; el.style.height = (size*2) + 'px';
+      el.style.left = ((i + rnd(.1,.9)) / count * 100) + '%';
+      el.style.animationDuration = rnd(3.5,6) + 's';
+      el.style.animationDelay = (-rnd(0,5)) + 's';
+      el.innerHTML = flowerSVG(petal, center);
+      garden.appendChild(el);
+    }
+  }
+
+  const BEE_SVG = `<svg viewBox="0 0 40 30" xmlns="http://www.w3.org/2000/svg">
+    <g class="wing"><ellipse cx="15" cy="8" rx="7" ry="5" fill="#eaf7ff" fill-opacity=".9" stroke="#9cc9e6" stroke-width=".6"/></g>
+    <g class="wing w2"><ellipse cx="23" cy="7" rx="7" ry="5" fill="#eaf7ff" fill-opacity=".9" stroke="#9cc9e6" stroke-width=".6"/></g>
+    <ellipse cx="20" cy="18" rx="13" ry="8.5" fill="#f6b73c"/>
+    <path d="M15 10.8 q-2.4 7.2 0 14.4 M21.5 9.9 q-2.4 8.1 0 16.2 M28 11.4 q-2.2 6.6 0 13.2" stroke="#2b3a55" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+    <circle cx="33.5" cy="17" r="5.2" fill="#2b3a55"/><circle cx="35.2" cy="15.6" r="1.3" fill="#fff"/>
+    <path d="M36 12.6 q2.6 -4 5 -4" stroke="#2b3a55" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+    <path d="M7 18 l-4 1.5 l4 1.5z" fill="#2b3a55"/>
+  </svg>`;
+
+  let bees = [], running = false, last = 0;
+
+  function pickTarget(b){
+    const fl = garden.querySelectorAll('.flower');
+    if(fl.length && Math.random() < .45){
+      const r = fl[Math.floor(Math.random()*fl.length)].getBoundingClientRect();
+      b.tx = r.left + r.width/2; b.ty = r.top + r.height*.25 - 16; b.onFlower = true;
+    }else{
+      b.tx = rnd(40, window.innerWidth - 40); b.ty = rnd(70, window.innerHeight - 70); b.onFlower = false;
+    }
+  }
+  function buildBees(){
+    beeLayer.innerHTML = ''; bees = [];
+    if(reduce) return;
+    const n = window.innerWidth < 700 ? 2 : 4;
+    for(let i=0;i<n;i++){
+      const el = document.createElement('div'); el.className = 'bee'; el.innerHTML = BEE_SVG;
+      beeLayer.appendChild(el);
+      const b = { el, x:rnd(0,window.innerWidth), y:rnd(0,window.innerHeight), vx:0, vy:0, wait:0, phase:rnd(0,6), dir:1, speed:rnd(70,115) };
+      pickTarget(b); bees.push(b);
+    }
+  }
+  function frame(t){
+    if(document.body.classList.contains('garden-off')){ running = false; return; }
+    const dt = Math.min(.05, (t - last)/1000 || .016); last = t;
+    for(const b of bees){
+      b.phase += dt * 5;
+      if(b.wait > 0){
+        b.wait -= dt;
+        b.vx *= .9; b.vy *= .9;
+        b.x += Math.sin(b.phase*1.3) * .35; b.y += Math.cos(b.phase*1.7) * .35;
+        if(b.wait <= 0) pickTarget(b);
+      }else{
+        const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy) || 1;
+        const k = Math.min(1, dt * 2.2);
+        b.vx += (dx/d * b.speed - b.vx) * k;
+        b.vy += (dy/d * b.speed - b.vy) * k;
+        b.x += b.vx*dt + Math.sin(b.phase) * .7;
+        b.y += b.vy*dt + Math.cos(b.phase*1.4) * .7;
+        if(d < 14) b.wait = b.onFlower ? rnd(1.5, 3.5) : rnd(.1, .6);
+      }
+      if(Math.abs(b.vx) > 12) b.dir = b.vx >= 0 ? 1 : -1;
+      const tilt = Math.max(-25, Math.min(25, b.vy * .22)) * b.dir;
+      b.el.style.transform = `translate3d(${(b.x-19).toFixed(1)}px,${(b.y-14).toFixed(1)}px,0) scaleX(${b.dir}) rotate(${tilt.toFixed(1)}deg)`;
+    }
+    requestAnimationFrame(frame);
+  }
+  function start(){
+    if(running || reduce || !bees.length) return;
+    running = true; last = performance.now(); requestAnimationFrame(frame);
+  }
+
+  buildFlowers(); buildBees(); if(!off) start();
+
+  let bucket = Math.round(window.innerWidth/95), rt;
+  window.addEventListener('resize', ()=>{
+    clearTimeout(rt);
+    rt = setTimeout(()=>{
+      const nb = Math.round(window.innerWidth/95);
+      if(nb !== bucket){ bucket = nb; buildFlowers(); }
+      const want = window.innerWidth < 700 ? 2 : 4;
+      if(!reduce && bees.length !== want){ buildBees(); start(); }
+    }, 250);
+  });
+  document.getElementById('btnGarden').addEventListener('click', ()=>{
+    const nowOff = document.body.classList.toggle('garden-off');
+    try{ localStorage.setItem('garden', nowOff ? 'off' : 'on'); }catch(e){}
+    if(!nowOff) start();
+  });
+})();
 </script>
 </body>
 </html>
