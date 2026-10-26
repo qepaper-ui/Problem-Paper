@@ -597,8 +597,8 @@ canvas{ height:auto; }
     <div class="login-logo">🏭</div>
     <h1>Panel Problem Produksi</h1>
     <p class="login-sub">Silakan masuk untuk melanjutkan</p>
-    <label for="loginEmail">Email</label>
-    <input id="loginEmail" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="nama@perusahaan.com" required>
+    <label for="loginEmail">Username</label>
+    <input id="loginEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username" required>
     <label for="loginPass">Password</label>
     <div class="pw-wrap">
       <input id="loginPass" type="password" autocomplete="current-password" placeholder="Password" required>
@@ -975,7 +975,10 @@ const SUPABASE_URL = 'https://esukioascntyyoslcyzg.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_3L32XQnIQt8WN3KUjW39dw_bIPqekh8';
 
 const isSupabaseConfigured = !SUPABASE_URL.includes('GANTI_DENGAN') && !SUPABASE_ANON_KEY.includes('GANTI_DENGAN');
-const sb = isSupabaseConfigured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+/* Sesi login disimpan di sessionStorage: otomatis hilang saat tab/browser ditutup (refresh tetap login) */
+let authStorage; try{ authStorage = window.sessionStorage; }catch(e){ authStorage = undefined; }
+try{ Object.keys(localStorage).filter(k=>/^sb-.*-auth-token/.test(k)).forEach(k=>localStorage.removeItem(k)); }catch(e){}  // buang sesi lama yang tersimpan permanen
+const sb = isSupabaseConfigured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: authStorage, persistSession: true, autoRefreshToken: true } }) : null;
 
 function ensureConfigured(){ if(!sb){ showToast('Supabase belum dikonfigurasi.'); return false; } return true; }
 
@@ -2921,6 +2924,7 @@ async function init(){
 }
 
 /* ============ LOGIN (Supabase Auth) ============ */
+const LOGIN_DOMAIN = 'produksi.app';   // username qcpaper = akun Supabase qcpaper@produksi.app
 let appStarted = false;
 const $login = id => document.getElementById(id);
 
@@ -2936,7 +2940,7 @@ function showLoginError(msg){
 }
 function loginMessage(err){
   const m = (err && err.message || '').toLowerCase();
-  if(m.includes('invalid login')) return 'Email atau password salah.';
+  if(m.includes('invalid login')) return 'Username atau password salah.';
   if(m.includes('email not confirmed')) return 'Email belum dikonfirmasi. Hubungi admin.';
   if(m.includes('too many') || m.includes('rate limit')) return 'Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.';
   if(m.includes('fetch') || m.includes('network')) return 'Tidak bisa terhubung ke server. Periksa koneksi internet.';
@@ -2949,9 +2953,10 @@ $login('loginForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   showLoginError('');
   if(!sb){ showLoginError('Koneksi Supabase belum dikonfigurasi.'); return; }
-  const email = $login('loginEmail').value.trim();
+  const uname = $login('loginEmail').value.trim().toLowerCase();
+  const email = uname.includes('@') ? uname : uname + '@' + LOGIN_DOMAIN;   // username -> email internal Supabase
   const password = $login('loginPass').value;
-  if(!email || !password){ showLoginError('Isi email dan password.'); return; }
+  if(!email || !password){ showLoginError('Isi username dan password.'); return; }
   const btn = $login('loginBtn'); btn.disabled = true; btn.textContent = 'Memproses…';
   try{
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
