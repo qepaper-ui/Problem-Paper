@@ -507,28 +507,11 @@ body.locked .sidebar, body.locked header.top, body.locked main{ display:none !im
 .login-btn:disabled{ opacity:.6; cursor:wait; transform:none; }
 .login-foot{ margin-top:16px; font-size:11.5px; color:var(--text-soft); font-weight:600; }
 
-/* ================= BUNGA & LEBAH ================= */
-#garden{
-  position:fixed; left:0; right:0; bottom:0; height:125px; z-index:30; pointer-events:none; overflow:hidden;
-}
-.flower{ position:absolute; bottom:-4px; transform-origin:50% 100%; animation:sway 4.5s ease-in-out infinite alternate; }
-.flower svg{ display:block; width:100%; height:100%; overflow:visible; }
-.flower .head{ transform-box:fill-box; transform-origin:center; animation:bloom 6s ease-in-out infinite alternate; }
-@keyframes sway{ from{ transform:rotate(-4deg); } to{ transform:rotate(4deg); } }
-@keyframes bloom{ from{ transform:scale(.94) rotate(-6deg); } to{ transform:scale(1.05) rotate(6deg); } }
-#bees{ position:fixed; inset:0; z-index:55; pointer-events:none; overflow:hidden; }
-.bee{ position:absolute; left:0; top:0; width:38px; height:29px; will-change:transform; filter:drop-shadow(0 4px 3px rgba(0,0,0,.16)); }
-.bee svg{ display:block; width:100%; height:100%; overflow:visible; }
-.bee .wing{ transform-box:fill-box; transform-origin:50% 100%; animation:flap .11s ease-in-out infinite alternate; }
-.bee .wing.w2{ animation-delay:.05s; }
-@keyframes flap{ from{ transform:rotate(-16deg) scaleY(1); } to{ transform:rotate(12deg) scaleY(.75); } }
-body.garden-off #garden, body.garden-off #bees{ display:none; }
-#btnGarden{ opacity:.9; }
-body.garden-off #btnGarden{ opacity:.45; }
-@media (prefers-reduced-motion:reduce){
-  .flower, .flower .head, .bee .wing{ animation:none !important; }
-}
-main{ padding-bottom:140px; }
+/* ================= IKAN KOI ================= */
+#koi{ position:fixed; left:0; top:0; z-index:55; pointer-events:none; max-width:none !important; }
+body.koi-off #koi{ display:none; }
+#btnKoi{ opacity:.9; }
+body.koi-off #btnKoi{ opacity:.45; }
 
 /* ================= RESPONSIVE ================= */
 html{ -webkit-text-size-adjust:100%; }
@@ -561,7 +544,7 @@ canvas{ height:auto; }
   .custom-range{ margin-left:0; width:100%; flex-wrap:wrap; }
   .custom-range input[type=date]{ flex:1; min-width:130px; }
   nav.tabs{ display:none; }
-  main{ padding:6px 12px calc(190px + env(safe-area-inset-bottom)) 12px; }
+  main{ padding:6px 12px calc(90px + env(safe-area-inset-bottom)) 12px; }
   .panel{ padding:16px 14px; border-radius:18px; overflow-x:auto; }
   .kpi-grid, .dash-grid .kpi-grid{ gap:10px; }
   .barrow{ grid-template-columns:84px 1fr 36px; gap:8px; }
@@ -576,7 +559,6 @@ canvas{ height:auto; }
   .gallery-grid{ grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
   .lightbox{ padding:12px; }
   .toast{ left:12px; right:12px; bottom:calc(76px + env(safe-area-inset-bottom)); text-align:center; }
-  #garden{ bottom:calc(62px + env(safe-area-inset-bottom)); height:95px; }
   .login-card{ padding:26px 20px 22px; }
 }
 @media(min-width:1700px){
@@ -587,9 +569,8 @@ canvas{ height:auto; }
 </head>
 <body class="locked">
 
-<!-- BUNGA & LEBAH -->
-<div id="garden" aria-hidden="true"></div>
-<div id="bees" aria-hidden="true"></div>
+<!-- IKAN KOI -->
+<canvas id="koi" aria-hidden="true"></canvas>
 
 <!-- LOGIN -->
 <div id="loginOverlay" class="login-overlay">
@@ -622,7 +603,7 @@ canvas{ height:auto; }
   <button class="sb-btn" data-tab="data" title="Data Lengkap">🗂️</button>
   <button class="sb-btn" data-tab="master" title="Master Data">⚙️</button>
   <div class="sb-spacer"></div>
-  <button class="sb-btn" id="btnGarden" title="Bunga &amp; lebah: hidup / mati">🐝</button>
+  <button class="sb-btn" id="btnKoi" title="Ikan koi &amp; teratai: hidup / mati (klik 2x di layar = beri makan)">🐟</button>
   <button class="sb-btn sb-exit" id="btnLogout" title="Keluar">⏻</button>
 </aside>
 
@@ -2989,122 +2970,411 @@ bootAuth();
 </script>
 
 <script>
-/* ============ BUNGA & LEBAH BERGERAK ============ */
+/* ============ IKAN KOI + TERATAI (canvas) — berinteraksi dengan mouse ============
+   - Kursor mendekat  : ikan menghindar
+   - Klik 1x          : riak air, ikan di dekatnya kaget
+   - Klik 2x / tap 2x : tebar pakan, ikan berkumpul memakannya
+   - Daun & bunga teratai mengapung, bergeser bila tersenggol ikan / kursor
+   (klik pada tombol / input / link tidak memicu apa-apa) */
 (function(){
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const garden = document.getElementById('garden');
-  const beeLayer = document.getElementById('bees');
-  const PALETTE = [['#f07fb0','#fce4ee'],['#f6b73c','#fdf1da'],['#9b7ff0','#efe9fd'],['#ffffff','#e8eef2'],['#f0687c','#fde3e8'],['#4a9fe0','#e3f1fb']];
+  const canvas = document.getElementById('koi');
+  const ctx = canvas.getContext('2d');
+  const TAU = Math.PI * 2;
   const rnd = (a,b)=> a + Math.random()*(b-a);
-  let off = false; try{ off = localStorage.getItem('garden') === 'off'; }catch(e){}
-  if(off) document.body.classList.add('garden-off');
+  const pick = a => a[Math.floor(Math.random()*a.length)];
+  const angDiff = (a,b)=>{ let d = b - a; while(d > Math.PI) d -= TAU; while(d < -Math.PI) d += TAU; return d; };
+  let off = false; try{ off = localStorage.getItem('koi') === 'off'; }catch(e){}
+  if(off) document.body.classList.add('koi-off');
 
-  function flowerSVG(petal, center){
-    let p = '';
-    for(let i=0;i<8;i++) p += `<ellipse cx="50" cy="27" rx="9.5" ry="17" fill="${petal}" stroke="rgba(43,58,85,.12)" stroke-width=".8" transform="rotate(${i*45} 50 50)"/>`;
-    return `<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg">
-      <path d="M50 52 C46 100 54 150 50 200" stroke="#4ecb8e" stroke-width="5" fill="none" stroke-linecap="round"/>
-      <ellipse cx="36" cy="135" rx="15" ry="6" fill="#4ecb8e" transform="rotate(-30 36 135)"/>
-      <ellipse cx="65" cy="158" rx="15" ry="6" fill="#43b97f" transform="rotate(28 65 158)"/>
-      <g class="head">${p}<circle cx="50" cy="50" r="9.5" fill="${center}"/><circle cx="50" cy="50" r="9.5" fill="none" stroke="rgba(43,58,85,.18)" stroke-width="1"/></g>
-    </svg>`;
+  let W = 0, H = 0, dpr = 1;
+  function resize(){
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
   }
-  function buildFlowers(){
-    garden.innerHTML = '';
-    const W = window.innerWidth;
-    const count = Math.max(5, Math.min(18, Math.round(W / 95)));
-    for(let i=0;i<count;i++){
-      const size = Math.round(rnd(38, 58));
-      const [petal] = PALETTE[Math.floor(Math.random()*PALETTE.length)];
-      const center = petal === '#f6b73c' ? '#e8742c' : '#f6b73c';
-      const el = document.createElement('div');
-      el.className = 'flower';
-      el.style.width = size + 'px'; el.style.height = (size*2) + 'px';
-      el.style.left = ((i + rnd(.1,.9)) / count * 100) + '%';
-      el.style.animationDuration = rnd(3.5,6) + 's';
-      el.style.animationDelay = (-rnd(0,5)) + 's';
-      el.innerHTML = flowerSVG(petal, center);
-      garden.appendChild(el);
-    }
+  resize();
+
+  const VARIANTS = [
+    { base:'#fbf4ea', fin:'rgba(255,238,222,.72)', patches:['#f2552c','#f2552c','#f68a3c'], head:'#e8381c' },   // kohaku
+    { base:'#f58a2c', fin:'rgba(255,198,134,.72)', patches:['#fff3e2','#e23a1c','#fff3e2'], head:null },       // oranye
+    { base:'#fbf4ea', fin:'rgba(250,238,224,.72)', patches:['#f2552c','#222f48','#f2552c'], head:null },       // sanke
+    { base:'#f4be45', fin:'rgba(252,228,154,.72)', patches:['#fbe3a0','#f0952c','#fbe3a0'], head:null },       // emas
+    { base:'#26324a', fin:'rgba(130,145,172,.7)', patches:['#f2552c','#fbf4ea','#f2552c'], head:null },      // showa
+    { base:'#e9eef2', fin:'rgba(242,247,250,.78)', patches:['#ffffff','#f6a34a','#ffffff'], head:null }        // platinum
+  ];
+  const PROFILE = [.60,.86,.98,1,.96,.86,.72,.58,.46,.36,.28,.22];
+  const N = PROFILE.length;
+
+  const fishes = [], ripples = [], food = [];
+  const mouse = { x:-999, y:-999, on:false };
+  let running = false, last = 0, fid = 0;
+
+  function pickTarget(f){
+    const m = 70;
+    f.tx = rnd(m, Math.max(m+1, W - m)); f.ty = rnd(m, Math.max(m+1, H - m)); f.t = 0;
   }
-
-  const BEE_SVG = `<svg viewBox="0 0 40 30" xmlns="http://www.w3.org/2000/svg">
-    <g class="wing"><ellipse cx="15" cy="8" rx="7" ry="5" fill="#eaf7ff" fill-opacity=".9" stroke="#9cc9e6" stroke-width=".6"/></g>
-    <g class="wing w2"><ellipse cx="23" cy="7" rx="7" ry="5" fill="#eaf7ff" fill-opacity=".9" stroke="#9cc9e6" stroke-width=".6"/></g>
-    <ellipse cx="20" cy="18" rx="13" ry="8.5" fill="#f6b73c"/>
-    <path d="M15 10.8 q-2.4 7.2 0 14.4 M21.5 9.9 q-2.4 8.1 0 16.2 M28 11.4 q-2.2 6.6 0 13.2" stroke="#2b3a55" stroke-width="3.2" fill="none" stroke-linecap="round"/>
-    <circle cx="33.5" cy="17" r="5.2" fill="#2b3a55"/><circle cx="35.2" cy="15.6" r="1.3" fill="#fff"/>
-    <path d="M36 12.6 q2.6 -4 5 -4" stroke="#2b3a55" stroke-width="1.2" fill="none" stroke-linecap="round"/>
-    <path d="M7 18 l-4 1.5 l4 1.5z" fill="#2b3a55"/>
-  </svg>`;
-
-  let bees = [], running = false, last = 0;
-
-  function pickTarget(b){
-    const fl = garden.querySelectorAll('.flower');
-    if(fl.length && Math.random() < .45){
-      const r = fl[Math.floor(Math.random()*fl.length)].getBoundingClientRect();
-      b.tx = r.left + r.width/2; b.ty = r.top + r.height*.25 - 16; b.onFlower = true;
-    }else{
-      b.tx = rnd(40, window.innerWidth - 40); b.ty = rnd(70, window.innerHeight - 70); b.onFlower = false;
-    }
+  function makeFish(i){
+    const small = W < 700;
+    const baby = Math.random() < .22;
+    const s = (small ? .7 : 1) * (baby ? rnd(.55,.7) : rnd(.85,1.25));
+    const f = {
+      id: ++fid, s, L: 9*s, maxW: 12.5*s,
+      x: rnd(0,W), y: rnd(0,H), ang: rnd(0,TAU), speed: 0,
+      base: rnd(42,66) * (small ? .8 : 1), wave: rnd(0,6), startle: 0, sx: 0, sy: 0,
+      v: VARIANTS[i % VARIANTS.length], seg: [], patches: [], geo: null
+    };
+    for(let k=0;k<N;k++) f.seg.push({ x: f.x - Math.cos(f.ang)*f.L*k, y: f.y - Math.sin(f.ang)*f.L*k });
+    const cnt = 3 + Math.floor(rnd(0,3));
+    for(let k=0;k<cnt;k++) f.patches.push({ u:rnd(1.2,8.5), off:rnd(-.5,.5), rx:rnd(7,14)*s, ry:rnd(5,9)*s, col:pick(f.v.patches) });
+    if(f.v.head) f.patches.push({ u:.7, off:0, rx:7*s, ry:6.5*s, col:f.v.head });
+    pickTarget(f);
+    return f;
   }
-  function buildBees(){
-    beeLayer.innerHTML = ''; bees = [];
+  function buildFish(){
+    fishes.length = 0;
     if(reduce) return;
-    const n = window.innerWidth < 700 ? 2 : 4;
-    for(let i=0;i<n;i++){
-      const el = document.createElement('div'); el.className = 'bee'; el.innerHTML = BEE_SVG;
-      beeLayer.appendChild(el);
-      const b = { el, x:rnd(0,window.innerWidth), y:rnd(0,window.innerHeight), vx:0, vy:0, wait:0, phase:rnd(0,6), dir:1, speed:rnd(70,115) };
-      pickTarget(b); bees.push(b);
+    const n = W < 700 ? 7 : 14;
+    for(let i=0;i<n;i++) fishes.push(makeFish(i));
+  }
+
+
+  /* ---------- teratai ---------- */
+  const plants = [];
+  function makeSprite(size, draw){
+    const c = document.createElement('canvas'), px = Math.ceil(size*dpr);
+    c.width = c.height = px;
+    const g = c.getContext('2d');
+    g.scale(px/size, px/size); g.translate(size/2, size/2);
+    draw(g, size/2);
+    return c;
+  }
+  function drawPadSprite(g, R){
+    const r = R*.94, wedge = .2*Math.PI;
+    const gr = g.createRadialGradient(-r*.25, -r*.25, r*.1, 0, 0, r);
+    gr.addColorStop(0, '#7fd17c'); gr.addColorStop(.6, '#46a55a'); gr.addColorStop(1, '#2c7f47');
+    g.beginPath(); g.moveTo(0,0); g.arc(0,0,r, wedge/2, TAU - wedge/2); g.closePath();
+    g.fillStyle = gr; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(20,80,45,.55)'; g.stroke();
+    g.strokeStyle = 'rgba(225,255,218,.33)'; g.lineWidth = .9;
+    for(let i=0;i<14;i++){
+      const a = wedge/2 + (TAU - wedge)*(i+.5)/14;
+      g.beginPath(); g.moveTo(0,0); g.lineTo(Math.cos(a)*r*.93, Math.sin(a)*r*.93); g.stroke();
+    }
+    g.beginPath(); g.arc(-r*.3, -r*.3, r*.38, 0, TAU); g.fillStyle = 'rgba(255,255,255,.08)'; g.fill();
+  }
+  function petal(g, len, wid, tip, base){
+    const gr = g.createLinearGradient(0,0,0,-len);
+    gr.addColorStop(0, base); gr.addColorStop(1, tip);
+    g.beginPath(); g.moveTo(0,0);
+    g.quadraticCurveTo(wid, -len*.45, 0, -len);
+    g.quadraticCurveTo(-wid, -len*.45, 0, 0);
+    g.fillStyle = gr; g.fill(); g.lineWidth = .8; g.strokeStyle = 'rgba(185,60,105,.33)'; g.stroke();
+  }
+  function drawLotusSprite(g, R, pal){
+    const layers = [
+      { n:9, len:R*.98, wid:R*.34, rot:0,           tip:pal.tip[0] },
+      { n:7, len:R*.74, wid:R*.30, rot:Math.PI/7,   tip:pal.tip[1] },
+      { n:5, len:R*.50, wid:R*.24, rot:.3,          tip:pal.tip[2] }
+    ];
+    for(const L of layers){
+      for(let i=0;i<L.n;i++){ g.save(); g.rotate(L.rot + i*TAU/L.n); petal(g, L.len, L.wid, L.tip, pal.base); g.restore(); }
+    }
+    g.beginPath(); g.arc(0,0,R*.15,0,TAU); g.fillStyle = '#f6c945'; g.fill();
+    for(let i=0;i<10;i++){ const a = i*TAU/10; g.beginPath(); g.arc(Math.cos(a)*R*.1, Math.sin(a)*R*.1, R*.022, 0, TAU); g.fillStyle = '#e8902c'; g.fill(); }
+  }
+  const LOTUS_PAL = [
+    { tip:['#f7a8c4','#f58fb5','#ee6f9c'], base:'#fff4f8' },
+    { tip:['#fde8ef','#fbd5e3','#f7bcd2'], base:'#ffffff' }
+  ];
+  function buildPlants(){
+    plants.length = 0;
+    if(reduce) return;
+    const small = W < 700, k = small ? .75 : 1;
+    const clusters = small ? 2 : 3;
+    const place = (x,y,r)=>({ x:Math.max(r, Math.min(W-r, x)), y:Math.max(r, Math.min(H-r, y)) });
+    for(let c=0;c<clusters;c++){
+      // gerombol teratai cenderung di tepi layar agar tidak terlalu menutupi isi
+      const cx = (Math.random() < .5 ? rnd(.04,.2) : rnd(.8,.96)) * W;
+      const cy = rnd(.12,.85) * H;
+      const items = [];
+      const lr = rnd(26,34)*k;
+      items.push({ type:'lotus', r:lr, x:cx, y:cy });
+      const np = 2 + Math.floor(rnd(0,2));
+      for(let i=0;i<np;i++){
+        const a = rnd(0,TAU), d = rnd(46,80)*k, r = rnd(24,38)*k;
+        items.push({ type:'pad', r, x:cx + Math.cos(a)*d, y:cy + Math.sin(a)*d });
+      }
+      for(const it of items){
+        const h = place(it.x, it.y, it.r);
+        const size = it.r*2.1;
+        const sprite = it.type === 'pad'
+          ? makeSprite(size, (g,R)=>drawPadSprite(g,R))
+          : makeSprite(size, (g,R)=>drawLotusSprite(g,R,pick(LOTUS_PAL)));
+        plants.push({ type:it.type, r:it.r, size, sprite, hx:h.x, hy:h.y, x:h.x, y:h.y, vx:0, vy:0,
+          rot:rnd(0,TAU), rotV:0, seed:rnd(0,6), phase:rnd(0,6) });
+      }
     }
   }
-  function frame(t){
-    if(document.body.classList.contains('garden-off')){ running = false; return; }
-    const dt = Math.min(.05, (t - last)/1000 || .016); last = t;
-    for(const b of bees){
-      b.phase += dt * 5;
-      if(b.wait > 0){
-        b.wait -= dt;
-        b.vx *= .9; b.vy *= .9;
-        b.x += Math.sin(b.phase*1.3) * .35; b.y += Math.cos(b.phase*1.7) * .35;
-        if(b.wait <= 0) pickTarget(b);
-      }else{
-        const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy) || 1;
-        const k = Math.min(1, dt * 2.2);
-        b.vx += (dx/d * b.speed - b.vx) * k;
-        b.vy += (dy/d * b.speed - b.vy) * k;
-        b.x += b.vx*dt + Math.sin(b.phase) * .7;
-        b.y += b.vy*dt + Math.cos(b.phase*1.4) * .7;
-        if(d < 14) b.wait = b.onFlower ? rnd(1.5, 3.5) : rnd(.1, .6);
+  function updatePlants(dt){
+    for(const p of plants){
+      p.phase += dt;
+      p.vx += (p.hx - p.x)*2.2*dt; p.vy += (p.hy - p.y)*2.2*dt;
+      for(const f of fishes){
+        const dx = p.x - f.x, dy = p.y - f.y, d = Math.hypot(dx,dy) || 1, R = p.r + 12*f.s;
+        if(d < R){ const a = (1 - d/R)*(120 + f.speed*2); p.vx += dx/d*a*dt; p.vy += dy/d*a*dt; p.rotV += (dx*Math.sin(f.ang) - dy*Math.cos(f.ang))/d*.5*dt; }
       }
-      if(Math.abs(b.vx) > 12) b.dir = b.vx >= 0 ? 1 : -1;
-      const tilt = Math.max(-25, Math.min(25, b.vy * .22)) * b.dir;
-      b.el.style.transform = `translate3d(${(b.x-19).toFixed(1)}px,${(b.y-14).toFixed(1)}px,0) scaleX(${b.dir}) rotate(${tilt.toFixed(1)}deg)`;
+      if(mouse.on){
+        const dx = p.x - mouse.x, dy = p.y - mouse.y, d = Math.hypot(dx,dy) || 1, R = p.r + 30;
+        if(d < R){ const a = (1 - d/R)*160; p.vx += dx/d*a*dt; p.vy += dy/d*a*dt; }
+      }
+      const damp = 1 - Math.min(1, 1.8*dt);
+      p.vx *= damp; p.vy *= damp; p.rotV *= 1 - Math.min(1, 1.2*dt);
+      p.x += p.vx*dt; p.y += p.vy*dt; p.rot += p.rotV*dt + .02*dt;
     }
+  }
+  function drawPlants(){
+    for(const pass of ['shadow','sprite']){
+      for(const p of plants){
+        const ox = Math.sin(p.phase*.5 + p.seed)*3, oy = Math.cos(p.phase*.43 + p.seed)*3;
+        const sc = 1 + Math.sin(p.phase*.9 + p.seed)*.015;
+        const x = p.x + ox, y = p.y + oy;
+        if(pass === 'shadow'){
+          ctx.beginPath(); ctx.arc(x + 7, y + 10, p.r*.95*sc, 0, TAU); ctx.fillStyle = 'rgba(0,55,80,.13)'; ctx.fill();
+        }else{
+          ctx.save(); ctx.translate(x,y); ctx.rotate(p.rot + Math.sin(p.phase*.3 + p.seed)*.1); ctx.scale(sc,sc);
+          ctx.drawImage(p.sprite, -p.size/2, -p.size/2, p.size, p.size);
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  function addRipple(x,y,k){ ripples.push({ x, y, r:2, max:(k||1)*70, a:1 }); }
+  function nearestFood(f){
+    let best = null, bd = 1e9;
+    for(const p of food){ if(p.eaten) continue; const d = Math.hypot(p.x-f.x, p.y-f.y); if(d < bd){ bd = d; best = p; } }
+    return best;
+  }
+
+  function update(dt){
+    for(const f of fishes){
+      f.wave += dt * (5 + f.speed*.08);
+      f.t += dt;
+      const pellet = nearestFood(f);
+      let tx = f.tx, ty = f.ty, mul = 1;
+      if(pellet){ tx = pellet.x; ty = pellet.y; mul = 1.5; }
+      let vx = tx - f.x, vy = ty - f.y, d = Math.hypot(vx,vy) || 1;
+      vx /= d; vy /= d;
+      if(!pellet && (d < 60 || f.t > 14)) pickTarget(f);
+
+      if(mouse.on){                                   // menghindari kursor
+        const mx = f.x - mouse.x, my = f.y - mouse.y, md = Math.hypot(mx,my) || 1, R = 150*f.s;
+        if(md < R){ const k = 1 - md/R; vx += mx/md*k*3; vy += my/md*k*3; mul = Math.max(mul, 1 + k*1.8); }
+      }
+      if(f.startle > 0){ f.startle -= dt; vx += f.sx*2; vy += f.sy*2; mul *= 2.2; }
+      for(const o of fishes){                         // jaga jarak antar ikan
+        if(o === f) continue;
+        const ox = f.x - o.x, oy = f.y - o.y, od = Math.hypot(ox,oy), R = 70*f.s;
+        if(od > 0 && od < R){ vx += ox/od*(1-od/R)*1.2; vy += oy/od*(1-od/R)*1.2; }
+      }
+      const m = 40;                                   // tetap di dalam layar
+      if(f.x < m) vx += 1; if(f.x > W-m) vx -= 1; if(f.y < m) vy += 1; if(f.y > H-m) vy -= 1;
+
+      const want = Math.atan2(vy,vx) + Math.sin(f.wave*.15 + f.id)*.18;
+      const rate = (1.6 + (mul-1)*1.6) * dt;
+      f.ang += Math.max(-rate, Math.min(rate, angDiff(f.ang, want)));
+      f.speed += (f.base*mul - f.speed) * Math.min(1, dt*2.5);
+      f.x += Math.cos(f.ang)*f.speed*dt; f.y += Math.sin(f.ang)*f.speed*dt;
+      if(f.x < -80 || f.x > W+80 || f.y < -80 || f.y > H+80){ f.x = Math.max(0,Math.min(W,f.x)); f.y = Math.max(0,Math.min(H,f.y)); }
+
+      if(pellet && Math.hypot(pellet.x-f.x, pellet.y-f.y) < 14*f.s + 6){ pellet.eaten = true; addRipple(pellet.x, pellet.y, .45); }
+
+      f.seg[0].x = f.x; f.seg[0].y = f.y;             // tulang punggung mengikuti kepala
+      for(let k=1;k<N;k++){
+        const a = f.seg[k-1], b = f.seg[k];
+        const dx = b.x - a.x, dy = b.y - a.y, dd = Math.hypot(dx,dy) || 1;
+        b.x = a.x + dx/dd*f.L; b.y = a.y + dy/dd*f.L;
+      }
+    }
+    updatePlants(dt);
+    for(const r of ripples){ r.r += dt*75; r.a = Math.max(0, 1 - r.r/r.max); }
+    for(let i=ripples.length-1;i>=0;i--) if(ripples[i].a <= 0) ripples.splice(i,1);
+    for(const p of food) p.t += dt;
+    for(let i=food.length-1;i>=0;i--) if(food[i].eaten || food[i].t > 18) food.splice(i,1);
+  }
+
+  /* ---------- geometri & gambar ---------- */
+  function geometry(f){
+    const s = f.s, P = [];
+    const sp = Math.min(1, .4 + f.speed/60);
+    for(let k=0;k<N;k++){
+      const prev = f.seg[Math.max(0,k-1)], next = f.seg[Math.min(N-1,k+1)];
+      const a = Math.atan2(prev.y - next.y, prev.x - next.x);
+      const nx = -Math.sin(a), ny = Math.cos(a), t = k/(N-1);
+      const w = Math.sin(f.wave - k*.55) * s * (1 + 6*t*t) * sp;       // liukan badan
+      P.push({ x:f.seg[k].x + nx*w, y:f.seg[k].y + ny*w, nx:0, ny:0, a:0 });
+    }
+    for(let k=0;k<N;k++){
+      const prev = P[Math.max(0,k-1)], next = P[Math.min(N-1,k+1)];
+      const a = Math.atan2(prev.y - next.y, prev.x - next.x);
+      P[k].a = a; P[k].nx = -Math.sin(a); P[k].ny = Math.cos(a);
+    }
+    const Lp = [], Rp = [];
+    for(let k=0;k<N;k++){
+      const w = PROFILE[k]*f.maxW;
+      Lp.push({ x:P[k].x + P[k].nx*w, y:P[k].y + P[k].ny*w });
+      Rp.push({ x:P[k].x - P[k].nx*w, y:P[k].y - P[k].ny*w });
+    }
+    const a0 = P[0].a, w0 = PROFILE[0]*f.maxW;
+    const tip = { x:P[0].x + Math.cos(a0)*w0*1.05, y:P[0].y + Math.sin(a0)*w0*1.05 };
+    const e = P[N-1], tailEnd = { x:e.x - Math.cos(e.a)*2*s, y:e.y - Math.sin(e.a)*2*s };
+    const outline = [tip, ...Lp, tailEnd, ...Rp.slice().reverse()];
+    return { P, outline };
+  }
+  function tracePath(pts){
+    const n = pts.length, mid = (a,b)=>({ x:(a.x+b.x)/2, y:(a.y+b.y)/2 });
+    const m0 = mid(pts[n-1], pts[0]);
+    ctx.beginPath(); ctx.moveTo(m0.x, m0.y);
+    for(let i=0;i<n;i++){ const m = mid(pts[i], pts[(i+1)%n]); ctx.quadraticCurveTo(pts[i].x, pts[i].y, m.x, m.y); }
+    ctx.closePath();
+  }
+  function drawShadow(f){
+    const g = f.geo;
+    ctx.save(); ctx.translate(11*f.s, 15*f.s);
+    tracePath(g.outline); ctx.fillStyle = 'rgba(0,55,80,.12)'; ctx.fill();
+    ctx.restore();
+  }
+  function drawFish(f){
+    const s = f.s, { P, outline } = f.geo, v = f.v;
+    // --- sirip ekor
+    const e = P[N-1], ta = e.a + Math.PI, Lt = 36*s;
+    const sw = Math.sin(f.wave - N*.55 - .7) * Lt*.38;
+    const dx = Math.cos(ta), dy = Math.sin(ta), nx = e.nx, ny = e.ny;
+    const at = (d,l)=>({ x:e.x + dx*d + nx*l, y:e.y + dy*d + ny*l });
+    const b1 = at(0, 3*s), b2 = at(0,-3*s);
+    const l1 = at(Lt, sw + 11*s), l2 = at(Lt,  sw - 11*s), nt = at(Lt*.68, sw*.8);
+    const c1 = at(Lt*.45, sw*.35 + 12*s), c2 = at(Lt*.45, sw*.35 - 12*s);
+    ctx.beginPath(); ctx.moveTo(b1.x,b1.y);
+    ctx.quadraticCurveTo(c1.x,c1.y,l1.x,l1.y);
+    ctx.quadraticCurveTo(nt.x+nx*3*s, nt.y+ny*3*s, nt.x, nt.y);
+    ctx.quadraticCurveTo(nt.x-nx*3*s, nt.y-ny*3*s, l2.x, l2.y);
+    ctx.quadraticCurveTo(c2.x,c2.y,b2.x,b2.y); ctx.closePath();
+    ctx.fillStyle = v.fin; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = .8; ctx.stroke();
+    // --- sirip dada
+    for(const sg of [1,-1]){
+      const p = P[2], bw = PROFILE[2]*f.maxW*.92;
+      const bx = p.x + p.nx*sg*bw, by = p.y + p.ny*sg*bw;
+      const fa = p.a + Math.PI - sg*(.7 + Math.sin(f.wave*.5 + sg)*.28), rx = 11*s;
+      ctx.beginPath();
+      ctx.ellipse(bx + Math.cos(fa)*rx, by + Math.sin(fa)*rx, rx, 4.4*s, fa, 0, TAU);
+      ctx.fillStyle = v.fin; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = .7; ctx.stroke();
+    }
+    // --- badan
+    tracePath(outline); ctx.fillStyle = v.base; ctx.fill();
+    ctx.save(); tracePath(outline); ctx.clip();
+    for(const pt of f.patches){                                   // bercak warna
+      const i = Math.min(N-2, Math.floor(pt.u)), fr = pt.u - i;
+      const A = P[i], B = P[i+1];
+      const cx = A.x + (B.x-A.x)*fr + A.nx*pt.off*PROFILE[i]*f.maxW;
+      const cy = A.y + (B.y-A.y)*fr + A.ny*pt.off*PROFILE[i]*f.maxW;
+      ctx.beginPath(); ctx.ellipse(cx, cy, pt.rx, pt.ry, A.a, 0, TAU); ctx.fillStyle = pt.col; ctx.fill();
+    }
+    ctx.beginPath(); ctx.moveTo(P[1].x, P[1].y);                  // kilau di punggung
+    for(let k=2;k<N-2;k++) ctx.lineTo(P[k].x, P[k].y);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = f.maxW*.7; ctx.strokeStyle = 'rgba(255,255,255,.13)'; ctx.stroke();
+    ctx.restore();
+    tracePath(outline); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(40,50,70,.22)'; ctx.stroke();
+    // --- mata
+    const h = { x:(P[0].x+P[1].x)/2, y:(P[0].y+P[1].y)/2, nx:P[0].nx, ny:P[0].ny };
+    for(const sg of [1,-1]){
+      ctx.beginPath(); ctx.arc(h.x + h.nx*sg*PROFILE[0]*f.maxW*.78, h.y + h.ny*sg*PROFILE[0]*f.maxW*.78, 2*s, 0, TAU);
+      ctx.fillStyle = '#18263a'; ctx.fill();
+    }
+  }
+  function drawRipples(){
+    for(const r of ripples){
+      ctx.lineWidth = 1.6; ctx.strokeStyle = `rgba(59,167,201,${(r.a*.5).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, TAU); ctx.stroke();
+      if(r.r > 14){ ctx.lineWidth = 1; ctx.strokeStyle = `rgba(255,255,255,${(r.a*.6).toFixed(3)})`; ctx.beginPath(); ctx.arc(r.x, r.y, r.r-9, 0, TAU); ctx.stroke(); }
+    }
+  }
+  function drawFood(){
+    for(const p of food){
+      const a = p.t > 15 ? Math.max(0, 1 - (p.t-15)/3) : 1;
+      const bob = Math.sin(p.t*2 + p.x)*.8;
+      ctx.globalAlpha = a;
+      ctx.beginPath(); ctx.arc(p.x, p.y + bob, 3.3, 0, TAU); ctx.fillStyle = '#b8763a'; ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x-1, p.y + bob - 1, 1.1, 0, TAU); ctx.fillStyle = 'rgba(255,235,200,.8)'; ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function frame(ts){
+    if(document.body.classList.contains('koi-off')){ running = false; ctx.clearRect(0,0,W,H); return; }
+    const dt = Math.min(.05, (ts - last)/1000 || .016); last = ts;
+    update(dt);
+    ctx.clearRect(0,0,W,H);
+    drawRipples(); drawFood();
+    for(const f of fishes) f.geo = geometry(f);
+    ctx.globalAlpha = .9;
+    for(const f of fishes) drawShadow(f);
+    for(const f of fishes) drawFish(f);
+    drawPlants();                                   // teratai di atas ikan (ikan berenang di bawahnya)
+    ctx.globalAlpha = 1;
     requestAnimationFrame(frame);
   }
   function start(){
-    if(running || reduce || !bees.length) return;
+    if(running || reduce || !fishes.length) return;
     running = true; last = performance.now(); requestAnimationFrame(frame);
   }
 
-  buildFlowers(); buildBees(); if(!off) start();
+  /* ---------- interaksi ---------- */
+  const isUI = t => !!(t && t.closest && t.closest('button,a,input,select,textarea,label,summary,.sb-btn,.btn,.login-card'));
+  window.addEventListener('pointermove', e=>{
+    if(e.pointerType === 'touch') return;
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+  }, { passive:true });
+  document.documentElement.addEventListener('mouseleave', ()=>{ mouse.on = false; });
+  window.addEventListener('blur', ()=>{ mouse.on = false; });
 
-  let bucket = Math.round(window.innerWidth/95), rt;
+  let lastTap = { t:0, x:0, y:0 };
+  function feed(x,y){
+    for(let i=0;i<8;i++){ const a = rnd(0,TAU), r = rnd(0,28); food.push({ x:x + Math.cos(a)*r, y:y + Math.sin(a)*r, t:0, eaten:false }); }
+    addRipple(x, y, .8);
+  }
+  function startleNear(x,y){
+    for(const f of fishes){
+      const dx = f.x - x, dy = f.y - y, d = Math.hypot(dx,dy) || 1;
+      if(d < 140*f.s + 40){ f.startle = .7; f.sx = dx/d; f.sy = dy/d; }
+    }
+  }
+  window.addEventListener('pointerdown', e=>{
+    if(document.body.classList.contains('koi-off') || isUI(e.target) || !fishes.length) return;
+    const now = performance.now();
+    const dbl = now - lastTap.t < 380 && Math.hypot(e.clientX-lastTap.x, e.clientY-lastTap.y) < 36;
+    lastTap = { t: dbl ? 0 : now, x:e.clientX, y:e.clientY };
+    if(dbl) feed(e.clientX, e.clientY);
+    else { addRipple(e.clientX, e.clientY, 1); startleNear(e.clientX, e.clientY); }
+  }, { passive:true });
+
+  buildFish(); buildPlants(); if(!off) start();
+
+  let rt, lastW = W, lastH = H;
   window.addEventListener('resize', ()=>{
     clearTimeout(rt);
     rt = setTimeout(()=>{
-      const nb = Math.round(window.innerWidth/95);
-      if(nb !== bucket){ bucket = nb; buildFlowers(); }
-      const want = window.innerWidth < 700 ? 2 : 4;
-      if(!reduce && bees.length !== want){ buildBees(); start(); }
-    }, 250);
+      resize();
+      const want = W < 700 ? 7 : 14;
+      if(!reduce && fishes.length !== want){ buildFish(); start(); }
+      if(Math.abs(W - lastW) > 40 || Math.abs(H - lastH) > 160){ lastW = W; lastH = H; buildPlants(); }   // abaikan perubahan kecil (mis. bar alamat HP)
+    }, 200);
   });
-  document.getElementById('btnGarden').addEventListener('click', ()=>{
-    const nowOff = document.body.classList.toggle('garden-off');
-    try{ localStorage.setItem('garden', nowOff ? 'off' : 'on'); }catch(e){}
+  document.getElementById('btnKoi').addEventListener('click', ()=>{
+    const nowOff = document.body.classList.toggle('koi-off');
+    try{ localStorage.setItem('koi', nowOff ? 'off' : 'on'); }catch(e){}
     if(!nowOff) start();
   });
 })();
