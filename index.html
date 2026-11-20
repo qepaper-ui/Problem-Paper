@@ -271,9 +271,16 @@ tr:hover td{ background:var(--card-soft); }
 .photo-card .info .meta{ font-family:'Nunito',sans-serif; font-size:11px; color:var(--text-dim); margin-bottom:6px; font-weight:700; }
 .photo-card .info .desc{ font-size:12.5px; color:var(--text); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-weight:600; }
 
-.lightbox{ position:fixed; inset:0; background:rgba(20,30,45,.9); display:none; align-items:center; justify-content:center; z-index:999; padding:36px; cursor:zoom-out; }
+.lightbox{ position:fixed; inset:0; background:rgba(20,30,45,.92); display:none; align-items:center; justify-content:center; z-index:999; padding:0; cursor:default; touch-action:none; user-select:none; -webkit-user-select:none; overflow:hidden; }
 .lightbox.show{ display:flex; }
-.lightbox img{ max-width:100%; max-height:100%; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+.lightbox img{ max-width:92vw; max-height:82vh; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,.5); cursor:grab; transform-origin:50% 50%; will-change:transform; -webkit-user-drag:none; user-select:none; }
+.lightbox img.grabbing{ cursor:grabbing; }
+.lb-toolbar{ position:absolute; top:calc(12px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.14); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); padding:6px 8px; border-radius:14px; z-index:2; max-width:96vw; }
+.lb-toolbar button{ border:none; background:rgba(255,255,255,.18); color:#fff; min-width:36px; height:36px; border-radius:10px; font-size:17px; font-weight:800; cursor:pointer; font-family:'Nunito',sans-serif; padding:0 10px; }
+.lb-toolbar button:hover{ background:rgba(255,255,255,.34); }
+.lb-toolbar button.lb-close{ background:rgba(240,104,124,.85); }
+.lb-toolbar span{ color:#fff; font-size:12px; font-weight:700; min-width:46px; text-align:center; font-family:'Nunito',sans-serif; }
+.lb-hint{ position:absolute; bottom:calc(14px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); color:rgba(255,255,255,.72); font-size:12px; font-weight:600; white-space:nowrap; pointer-events:none; }
 
 /* PALLET */
 .pallet-row{ display:flex; align-items:center; gap:8px; background:var(--card-soft); border:1.5px solid var(--line); border-radius:12px; padding:10px; margin-bottom:8px; flex-wrap:wrap; }
@@ -565,6 +572,26 @@ canvas{ height:auto; }
   .top-inner, nav.tabs, main{ max-width:1560px; }
 }
 
+
+/* ===== Perubahan: warna Total Reject, Hot List dengan foto & QC ===== */
+:root{ --reject-color:#d9304f; }
+td.reject-cell, tr.high-reject td.reject-cell{ color:var(--reject-color) !important; font-weight:800; }
+.hot-thumbs{ display:flex; gap:6px; flex-shrink:0; }
+.hot-photo{ display:flex; flex-direction:column; align-items:center; gap:3px; }
+.hot-photo img, .hot-photo .hot-thumb-empty{ width:58px; height:58px; border-radius:12px; object-fit:cover; }
+.hot-photo span{ font-size:9px; font-weight:800; color:var(--text-soft); font-family:'Nunito',sans-serif; text-transform:uppercase; letter-spacing:.3px; }
+.hot-qc{ display:inline-block; font-size:11px; font-weight:800; color:var(--blue); background:var(--blue-soft); border-radius:8px; padding:2px 9px; margin-bottom:6px; }
+@media(max-width:700px){
+  .hot-row{ flex-wrap:wrap; gap:10px; }
+  .hot-info{ flex:1 1 150px; }
+  .hot-photo img, .hot-photo .hot-thumb-empty{ width:52px; height:52px; }
+  .hot-stats{ flex:1 1 100%; text-align:left; display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .lb-hint{ display:none; }
+  .lb-toolbar button{ min-width:34px; padding:0 8px; }
+}
+
+.photo-preview.show{ cursor:zoom-in; }
+.photo-preview.show:hover{ box-shadow:0 0 0 2px var(--blue); }
 </style>
 </head>
 <body class="locked">
@@ -945,7 +972,19 @@ canvas{ height:auto; }
 </main>
 
 <div class="toast" id="toast"></div>
-<div class="lightbox" id="lightbox"><img id="lightboxImg" src="" alt="Foto diperbesar"></div>
+<div class="lightbox" id="lightbox">
+  <div class="lb-toolbar">
+    <button type="button" data-act="zout" title="Perkecil (-)">−</button>
+    <span id="lbZoom">100%</span>
+    <button type="button" data-act="zin" title="Perbesar (+)">+</button>
+    <button type="button" data-act="rl" title="Putar ke kiri (Shift+R)">⟲</button>
+    <button type="button" data-act="rr" title="Putar ke kanan (R)">⟳</button>
+    <button type="button" data-act="reset" title="Kembalikan (0)">Reset</button>
+    <button type="button" data-act="close" class="lb-close" title="Tutup (Esc)">✕</button>
+  </div>
+  <img id="lightboxImg" src="" alt="Foto diperbesar" draggable="false">
+  <div class="lb-hint">Scroll = zoom · Seret = geser · Klik 2x = zoom cepat · ⟲ ⟳ = putar</div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -1331,9 +1370,93 @@ document.getElementById('f-qty-production').addEventListener('input', updateReje
 document.getElementById('f-total-reject').addEventListener('input', updateRejectPreview);
 
 /* LIGHTBOX */
-function openLightbox(url){ if(!url) return; document.getElementById('lightboxImg').src = url; document.getElementById('lightbox').classList.add('show'); }
-document.getElementById('lightbox').addEventListener('click', ()=>{ document.getElementById('lightbox').classList.remove('show'); document.getElementById('lightboxImg').src = ''; });
-document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ const lb = document.getElementById('lightbox'); if(lb.classList.contains('show')){ lb.classList.remove('show'); document.getElementById('lightboxImg').src=''; } } });
+/* LIGHTBOX: zoom (scroll / cubit), geser (seret), putar (tombol / R) */
+const LB = (()=>{
+  const box = document.getElementById('lightbox'), img = document.getElementById('lightboxImg'), zl = document.getElementById('lbZoom');
+  const MIN = .2, MAX = 10;
+  let s = 1, tx = 0, ty = 0, rot = 0, moved = false, drag = null, pinch = null, tmr = null;
+  const pts = new Map();
+  function apply(){ img.style.transform = `translate(${tx}px,${ty}px) rotate(${rot}deg) scale(${s})`; zl.textContent = Math.round(s*100) + '%'; }
+  function smooth(){ img.style.transition = 'transform .18s ease'; clearTimeout(tmr); tmr = setTimeout(()=>{ img.style.transition = ''; }, 220); }
+  function reset(animated){ if(animated) smooth(); s = 1; tx = 0; ty = 0; rot = 0; apply(); }
+  function zoomAt(f, px, py){
+    const r = box.getBoundingClientRect(), cx = r.left + r.width/2, cy = r.top + r.height/2;
+    const s2 = Math.min(MAX, Math.max(MIN, s*f)), k = s2/s;
+    tx = (px-cx) - k*((px-cx) - tx); ty = (py-cy) - k*((py-cy) - ty); s = s2; apply();
+  }
+  function zoomCenter(f){ const r = box.getBoundingClientRect(); zoomAt(f, r.left + r.width/2, r.top + r.height/2); }
+  function rotate(d){ smooth(); rot += d; apply(); }
+  function open(url){
+    if(!url) return;
+    img.style.transition = ''; reset(false);
+    img.src = url; box.classList.add('show'); document.body.style.overflow = 'hidden';
+  }
+  function close(){ box.classList.remove('show'); img.src = ''; document.body.style.overflow = ''; pts.clear(); drag = null; pinch = null; }
+  const isOpen = ()=> box.classList.contains('show');
+
+  box.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const dy = e.deltaMode === 1 ? e.deltaY*16 : e.deltaY;
+    zoomAt(Math.exp(-dy * (e.ctrlKey ? .01 : .0015)), e.clientX, e.clientY);
+  }, { passive:false });
+
+  box.addEventListener('pointerdown', e=>{
+    if(e.target.closest('.lb-toolbar')) return;
+    pts.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    try{ box.setPointerCapture(e.pointerId); }catch(_){}
+    if(pts.size === 1){ moved = false; drag = { x:e.clientX, y:e.clientY, tx, ty }; if(e.target === img) img.classList.add('grabbing'); }
+    else if(pts.size === 2){
+      const [a,b] = [...pts.values()];
+      pinch = { d: Math.hypot(a.x-b.x, a.y-b.y) || 1, s, mx:(a.x+b.x)/2, my:(a.y+b.y)/2 }; drag = null; moved = true;
+    }
+  });
+  box.addEventListener('pointermove', e=>{
+    if(!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    if(pinch && pts.size >= 2){
+      const [a,b] = [...pts.values()], d = Math.hypot(a.x-b.x, a.y-b.y) || 1, mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+      zoomAt((d/pinch.d*pinch.s)/s, mx, my);
+      tx += mx - pinch.mx; ty += my - pinch.my; pinch.mx = mx; pinch.my = my; apply();
+    }else if(drag){
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if(Math.hypot(dx,dy) > 4) moved = true;
+      tx = drag.tx + dx; ty = drag.ty + dy; apply();
+    }
+  });
+  function up(e){
+    if(!pts.has(e.pointerId)) return;
+    pts.delete(e.pointerId); img.classList.remove('grabbing');
+    if(pts.size < 2) pinch = null;
+    if(pts.size === 1){ const [p] = [...pts.values()]; drag = { x:p.x, y:p.y, tx, ty }; }
+    else if(pts.size === 0){
+      drag = null;
+      if(!moved && e.type === 'pointerup' && e.target === box) close();       // klik area gelap = tutup
+    }
+  }
+  box.addEventListener('pointerup', up);
+  box.addEventListener('pointercancel', up);
+  img.addEventListener('dblclick', e=>{ if(s > 1.05) reset(true); else { smooth(); zoomAt(2.5, e.clientX, e.clientY); } });
+  box.querySelector('.lb-toolbar').addEventListener('click', e=>{
+    const b = e.target.closest('button[data-act]'); if(!b) return;
+    ({ zin:()=>zoomCenter(1.35), zout:()=>zoomCenter(1/1.35), rl:()=>rotate(-90), rr:()=>rotate(90), reset:()=>reset(true), close })[b.dataset.act]();
+  });
+  document.addEventListener('keydown', e=>{
+    if(!isOpen()) return;
+    if(e.key === 'Escape') close();
+    else if(e.key === '+' || e.key === '=') zoomCenter(1.25);
+    else if(e.key === '-') zoomCenter(1/1.25);
+    else if(e.key === '0') reset(true);
+    else if(e.key === 'r' || e.key === 'R') rotate(e.shiftKey ? -90 : 90);
+  });
+  return { open, close };
+})();
+function openLightbox(url){ LB.open(url); }
+/* Pratinjau foto yang baru dipilih (form Input Harian, Foto Palet, Problem Log) juga bisa diperbesar */
+document.addEventListener('click', e=>{
+  const img = e.target.closest && e.target.closest('img.photo-preview.show, .pl-thumb img');
+  if(!img || img.hasAttribute('data-lightbox') || !img.getAttribute('src')) return;   // yang punya data-lightbox sudah ditangani sendiri
+  e.preventDefault(); openLightbox(img.src);
+});
 
 function photoCardHtml(e){
   const col = (url, label) => url ? `<div class="photo-col"><span class="cap">${label}</span><img src="${esc(url)}" data-lightbox="${esc(url)}" alt="${label}"></div>` : `<div class="photo-col"><span class="cap">${label}</span><div class="no-photo">Tidak ada foto</div></div>`;
@@ -1512,8 +1635,9 @@ function renderHotlistReject(wk){
     const rowStyle = rank>3 ? `style="border-left:4px solid ${rankColor};"` : '';
     const barPct = maxPct>0 ? Math.round((r.pct/maxPct)*100) : 0;
     const fire = rank===1 ? '🔥🔥🔥' : rank===2 ? '🔥🔥' : rank===3 ? '🔥' : '';
-    const thumb = e.photoNc ? `<img class="hot-thumb" src="${esc(e.photoNc)}" data-lightbox="${esc(e.photoNc)}" alt="Foto NC">` : `<div class="hot-thumb hot-thumb-empty">NC</div>`;
-    return `<div class="hot-row ${rankCls}" ${rowStyle}><div class="hot-rank">#${rank}</div>${thumb}<div class="hot-info"><div class="hot-name">${esc(e.machine)} · ${esc(e.problemType)} ${fire?'<span class="hot-fire">'+fire+'</span>':''}</div><div class="hot-sub">${esc(e.date)}${e.projectNumber?' · '+esc(e.projectNumber):''}</div><div class="hot-bar-wrap"><div class="hot-bar" style="width:${barPct}%;${rank>3?`background:${rankColor};`:''}"></div></div></div><div class="hot-stats"><div class="hot-reject">${r.pct.toFixed(2)}%</div><div class="hot-pct">${e.totalReject.toLocaleString('id-ID')} / ${e.qtyProduction.toLocaleString('id-ID')} unit</div></div></div>`;
+    const ph = (url,label)=> `<div class="hot-photo">${url ? `<img class="hot-thumb" src="${esc(url)}" data-lightbox="${esc(url)}" alt="Foto ${label}" title="Foto ${label} (klik untuk perbesar)" loading="lazy">` : `<div class="hot-thumb hot-thumb-empty">–</div>`}<span>${label}</span></div>`;
+    const thumb = `<div class="hot-thumbs">${ph(e.photoProblem,'Problem')}${ph(e.photoNc,'NC')}</div>`;
+    return `<div class="hot-row ${rankCls}" ${rowStyle}><div class="hot-rank">#${rank}</div>${thumb}<div class="hot-info"><div class="hot-name">${esc(e.machine)} · ${esc(e.problemType)} ${fire?'<span class="hot-fire">'+fire+'</span>':''}</div><div class="hot-sub">${esc(e.date)}${e.projectNumber?' · '+esc(e.projectNumber):''}</div><div class="hot-qc">👤 QC: ${esc(e.qc||'-')}</div><div class="hot-bar-wrap"><div class="hot-bar" style="width:${barPct}%;${rank>3?`background:${rankColor};`:''}"></div></div></div><div class="hot-stats"><div class="hot-reject">${r.pct.toFixed(2)}%</div><div class="hot-pct">${e.totalReject.toLocaleString('id-ID')} / ${e.qtyProduction.toLocaleString('id-ID')} unit</div></div></div>`;
   }).join('');
   bindLightboxTriggers(box);
 }
@@ -1550,7 +1674,7 @@ function renderDataTable(){
     const pct = entryRejectPct(e); const isHigh = pct!=null && pct>3.5;
     const palletPhotos = (e.pallets||[]).filter(p=>p.photo);
     const photoThumbs = [ e.photoProblem ? `<img class="table-thumb" src="${esc(e.photoProblem)}" data-lightbox="${esc(e.photoProblem)}" title="Foto Problem" alt="Foto Problem">` : '', e.photoNc ? `<img class="table-thumb" src="${esc(e.photoNc)}" data-lightbox="${esc(e.photoNc)}" title="Foto NC" alt="Foto NC">` : '', palletPhotos.length ? `<img class="table-thumb" src="${esc(palletPhotos[0].photo)}" data-lightbox="${esc(palletPhotos[0].photo)}" title="Foto Label Palet" alt="Foto Label Palet">` : '' ].filter(Boolean).join('');
-    return `<tr class="${isHigh?'high-reject':''}"><td class="mono">${esc(e.date)}</td><td class="mono">${esc(e.projectNumber||'-')}</td><td>${esc(e.shift||'-')}</td><td><span class="mtag" style="color:${colorForName(e.machine)};">${esc(e.machine)}</span></td><td class="mono">${(e.pallets&&e.pallets.length) ? esc(e.pallets.map(p=>p.number||'-').join(', ')) : '-'}${entryHasKelolosan(e)?' <span class="note-flag">⚠ Kelolosan QC</span>':''}</td><td>${esc(e.operator)}</td><td>${esc(e.qc)}</td><td>${esc(e.problemType)}</td><td class="desc-cell">${esc(e.desc)}</td><td class="mono">${e.qtyProduction!=null?e.qtyProduction.toLocaleString('id-ID'):'-'}</td><td class="mono">${e.totalReject!=null?e.totalReject.toLocaleString('id-ID'):'-'}</td><td class="mono">${e.qtyTotal!=null?e.qtyTotal.toLocaleString('id-ID'):'-'}</td><td class="mono pct-cell">${pct!=null?pct.toFixed(2)+'%':'-'}</td><td class="mono">${e.downtime?esc(e.downtime)+' mnt':'-'}</td><td><div class="table-photos">${photoThumbs || '<span class="table-thumb-empty">-</span>'}</div></td><td style="white-space:nowrap;"><button class="btn ghost small" data-edit2="${e.id}">Edit</button><button class="btn danger small" data-del2="${e.id}">Hapus</button></td></tr>`;
+    return `<tr class="${isHigh?'high-reject':''}"><td class="mono">${esc(e.date)}</td><td class="mono">${esc(e.projectNumber||'-')}</td><td>${esc(e.shift||'-')}</td><td><span class="mtag" style="color:${colorForName(e.machine)};">${esc(e.machine)}</span></td><td class="mono">${(e.pallets&&e.pallets.length) ? esc(e.pallets.map(p=>p.number||'-').join(', ')) : '-'}${entryHasKelolosan(e)?' <span class="note-flag">⚠ Kelolosan QC</span>':''}</td><td>${esc(e.operator)}</td><td>${esc(e.qc)}</td><td>${esc(e.problemType)}</td><td class="desc-cell">${esc(e.desc)}</td><td class="mono">${e.qtyProduction!=null?e.qtyProduction.toLocaleString('id-ID'):'-'}</td><td class="mono reject-cell">${e.totalReject!=null?e.totalReject.toLocaleString('id-ID'):'-'}</td><td class="mono">${e.qtyTotal!=null?e.qtyTotal.toLocaleString('id-ID'):'-'}</td><td class="mono pct-cell">${pct!=null?pct.toFixed(2)+'%':'-'}</td><td class="mono">${e.downtime?esc(e.downtime)+' mnt':'-'}</td><td><div class="table-photos">${photoThumbs || '<span class="table-thumb-empty">-</span>'}</div></td><td style="white-space:nowrap;"><button class="btn ghost small" data-edit2="${e.id}">Edit</button><button class="btn danger small" data-del2="${e.id}">Hapus</button></td></tr>`;
   }).join('');
   const th = document.getElementById('th-pct'); th.innerHTML = '% Reject' + (dataSort.key==='pct' ? `<span class="arrow">${dataSort.dir===1?'▲':'▼'}</span>` : '');
   bindLightboxTriggers(tbody);
@@ -3332,7 +3456,7 @@ bootAuth();
   }
 
   /* ---------- interaksi ---------- */
-  const isUI = t => !!(t && t.closest && t.closest('button,a,input,select,textarea,label,summary,.sb-btn,.btn,.login-card'));
+  const isUI = t => !!(t && t.closest && t.closest('button,a,input,select,textarea,label,summary,.sb-btn,.btn,.login-card,.lightbox'));
   window.addEventListener('pointermove', e=>{
     if(e.pointerType === 'touch') return;
     mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
