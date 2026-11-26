@@ -592,6 +592,26 @@ td.reject-cell, tr.high-reject td.reject-cell{ color:var(--reject-color) !import
 
 .photo-preview.show{ cursor:zoom-in; }
 .photo-preview.show:hover{ box-shadow:0 0 0 2px var(--blue); }
+
+/* Tombol periode: jangan ikut ukuran tombol panah (32px) agar teks tidak terpotong */
+.week-nav .period-btn{
+  width:auto; height:auto; min-width:78px; min-height:38px; padding:8px 16px;
+  font-size:13px; box-shadow:none; border-radius:9px; white-space:nowrap; background:transparent; color:var(--text-dim);
+}
+.week-nav .period-btn:hover{ transform:none; color:var(--blue); background:var(--blue-soft); }
+.week-nav .period-btn.active, .week-nav .period-btn.active:hover{ background:var(--blue); color:#fff; }
+.period-toggle{ flex-wrap:nowrap; }
+@media(max-width:700px){
+  .week-nav .period-btn{ flex:1 1 0; min-width:0; padding:8px 4px; font-size:12.5px; }
+  .week-nav button#prevWeek, .week-nav button#nextWeek{ width:40px; height:40px; }
+}
+
+.hot-qcrow{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:6px; }
+.hot-qcrow .hot-qc{ margin-bottom:0; }
+.hot-badge{ display:inline-block; font-size:11px; font-weight:800; border-radius:8px; padding:2px 9px; }
+.hot-badge.kel{ background:var(--red-soft); color:#c0394f; }
+.hot-badge.dit{ background:#dff6ea; color:#1f9d63; }
+.hot-badge.none{ background:var(--card-soft); color:var(--text-soft); }
 </style>
 </head>
 <body class="locked">
@@ -894,10 +914,11 @@ td.reject-cell, tr.high-reject td.reject-cell{ color:var(--reject-color) !import
           <div class="field"><label>Nomor Project</label><input type="text" id="f-project" list="projectList2" placeholder="cth. MBG 50"><datalist id="projectList2"></datalist></div>
           <div class="field"><label>Shift</label><select id="f-shift"><option value="">- Pilih shift -</option><option value="Shift 1">Shift 1</option><option value="Shift 2">Shift 2</option><option value="Shift 3">Shift 3</option></select></div>
           <div class="field"><label>Mesin</label><select id="f-machine" required></select></div>
-          <div class="field"><label>Operator</label><select id="f-operator" required></select></div>
+          <div class="field"><label>Operator</label><input type="text" id="f-operator" list="operatorList" placeholder="Ketik nama operator" autocomplete="off" autocapitalize="words" required><datalist id="operatorList"></datalist></div>
           <div class="field"><label>QC</label><select id="f-qc" required></select></div>
           <div class="field"><label>Proses</label><select id="f-process"></select></div>
-          <div class="field"><label>Jenis Problem</label><select id="f-problemtype" required></select></div>
+          <div class="field"><label>Jenis Problem</label><input type="text" id="f-problemtype" list="problemTypeList" placeholder="Ketik jenis problem" autocomplete="off" required><datalist id="problemTypeList"></datalist></div>
+          <div class="field"><label>Lokasi Sortir</label><select id="f-sort-location"></select></div>
           <div class="field"><label>Jumlah NC</label><input type="number" id="f-nc-count" min="0" placeholder="0"></div>
           <div class="field"><label>Downtime (menit)</label><input type="number" id="f-downtime" min="0" placeholder="0"></div>
         </div>
@@ -948,7 +969,7 @@ td.reject-cell, tr.high-reject td.reject-cell{ color:var(--reject-color) !import
         <table id="dataTable">
           <thead><tr>
             <th>Tanggal</th><th>No. Project</th><th>Shift</th><th>Mesin</th><th>No. Palet</th><th>Operator</th><th>QC</th>
-            <th>Jenis Problem</th><th>Deskripsi</th><th>Qty Production</th><th>Total Reject</th>
+            <th>Jenis Problem</th><th>Lokasi Sortir</th><th>Deskripsi</th><th>Qty Production</th><th>Total Reject</th>
             <th>Qty Total</th><th class="sortable" id="th-pct">% Reject</th><th>Downtime</th><th>Foto</th><th></th>
           </tr></thead>
           <tbody id="dataTableBody"></tbody>
@@ -959,13 +980,12 @@ td.reject-cell, tr.high-reject td.reject-cell{ color:var(--reject-color) !import
 
   <section id="tab-master" class="hidden">
     <div class="panel">
-      <h2>Kelola Daftar Mesin, Operator, QC &amp; Jenis Problem</h2>
+      <h2>Kelola Daftar Mesin, QC, Proses &amp; Lokasi Sortir</h2>
       <div class="master-cols">
         <div class="master-col"><h3>Mesin</h3><ul class="master-list" id="list-mesin"></ul><div class="addrow"><input type="text" id="add-mesin" placeholder="Nama mesin baru"><button class="btn small" data-add="mesin">+</button></div></div>
-        <div class="master-col"><h3>Operator</h3><ul class="master-list" id="list-operator"></ul><div class="addrow"><input type="text" id="add-operator" placeholder="Nama operator baru"><button class="btn small" data-add="operator">+</button></div></div>
         <div class="master-col"><h3>QC</h3><ul class="master-list" id="list-qc"></ul><div class="addrow"><input type="text" id="add-qc" placeholder="Nama QC baru"><button class="btn small" data-add="qc">+</button></div></div>
         <div class="master-col"><h3>Proses (urut)</h3><ul class="master-list" id="list-proses"></ul><div class="addrow"><input type="text" id="add-proses" placeholder="Nama proses baru"><button class="btn small" data-add="proses">+</button></div></div>
-        <div class="master-col"><h3>Jenis Problem</h3><ul class="master-list" id="list-jenisProblem"></ul><div class="addrow"><input type="text" id="add-jenisProblem" placeholder="Jenis problem baru"><button class="btn small" data-add="jenisProblem">+</button></div></div>
+        <div class="master-col"><h3>Lokasi Sortir</h3><ul class="master-list" id="list-lokasiSortir"></ul><div class="addrow"><input type="text" id="add-lokasiSortir" placeholder="Lokasi sortir baru"><button class="btn small" data-add="lokasiSortir">+</button></div></div>
       </div>
     </div>
   </section>
@@ -1002,7 +1022,7 @@ const sb = isSupabaseConfigured ? window.supabase.createClient(SUPABASE_URL, SUP
 
 function ensureConfigured(){ if(!sb){ showToast('Supabase belum dikonfigurasi.'); return false; } return true; }
 
-let master = { mesin: [], operator: [], qc: [], jenisProblem: [], proses: [] };
+let master = { mesin: [], qc: [], proses: [], lokasiSortir: [] };
 let projectProcess = [];
 let entries = [];
 let problemLogs = [];
@@ -1055,7 +1075,7 @@ function showToast(msg){ const t = document.getElementById('toast'); t.textConte
 function rowToEntry(r){
   let pallets = Array.isArray(r.pallets) ? r.pallets : [];
   if(pallets.length===0 && (r.pallet_number || r.photo_label_palet_url)){ pallets = [{ number: r.pallet_number||'', photo: r.photo_label_palet_url||'' }]; }
-  return { id: r.id, date: r.date, shift: r.shift||'', machine: r.machine||'', operator: r.operator||'', qc: r.qc||'', problemType: r.problem_type||'', downtime: r.downtime||'', desc: r.description||'', photoProblem: r.photo_problem_url||'', photoNc: r.photo_nc_url||'', pallets: pallets, projectNumber: normStr(r.project_number), process: r.process||'', ncCount: r.nc_count!=null ? Number(r.nc_count) : null, qtyProduction: r.qty_production!=null ? Number(r.qty_production) : null, totalReject: r.total_reject!=null ? Number(r.total_reject) : null, qtyTotal: r.qty_total!=null ? Number(r.qty_total) : null, rejectPercentage: r.reject_percentage!=null ? Number(r.reject_percentage) : null };
+  return { id: r.id, date: r.date, shift: r.shift||'', machine: r.machine||'', operator: r.operator||'', qc: r.qc||'', problemType: r.problem_type||'', sortLocation: r.sort_location||'', downtime: r.downtime||'', desc: r.description||'', photoProblem: r.photo_problem_url||'', photoNc: r.photo_nc_url||'', pallets: pallets, projectNumber: normStr(r.project_number), process: r.process||'', ncCount: r.nc_count!=null ? Number(r.nc_count) : null, qtyProduction: r.qty_production!=null ? Number(r.qty_production) : null, totalReject: r.total_reject!=null ? Number(r.total_reject) : null, qtyTotal: r.qty_total!=null ? Number(r.qty_total) : null, rejectPercentage: r.reject_percentage!=null ? Number(r.reject_percentage) : null };
 }
 
 async function seedMasterData(m){
@@ -1069,10 +1089,13 @@ async function loadAll(){
   try{
     const { data, error } = await sb.from('master_items').select('*').order('value');
     if(error) throw error;
-    master = { mesin: [], operator: [], qc: [], jenisProblem: [], proses: [] };
+    master = { mesin: [], qc: [], proses: [], lokasiSortir: [] };
     (data||[]).forEach(row=>{ if(master[row.category]) master[row.category].push(row.value); });
     if(!data || data.length===0){ master = defaultMaster(); await seedMasterData(master); }
-    else if(master.proses.length===0){ master.proses = defaultMaster().proses; await seedMasterData({ proses: master.proses }); }
+    else {
+      if(master.proses.length===0){ master.proses = defaultMaster().proses; await seedMasterData({ proses: master.proses }); }
+      if(master.lokasiSortir.length===0){ master.lokasiSortir = defaultMaster().lokasiSortir; await seedMasterData({ lokasiSortir: master.lokasiSortir }); }
+    }
   }catch(err){ console.error('Gagal memuat master data:', err); master = defaultMaster(); showToast('Gagal memuat master data dari Supabase'); }
   try{
     const { data, error } = await sb.from('problem_entries').select('*').order('date',{ascending:false});
@@ -1104,7 +1127,7 @@ async function loadAll(){
   dataReady = true;
 }
 
-function defaultMaster(){ return { mesin: ['Mesin 01','Mesin 02','Mesin 03'], operator: [], qc: [], jenisProblem: ['Setting/Adjustment','Kerusakan Komponen','Bahan Baku','Kualitas Hasil','Human Error','Listrik/Kelistrikan'], proses: ['Cutting','Forming','Welding','Assembly','Finishing','Final QC'] }; }
+function defaultMaster(){ return { mesin: ['Mesin 01','Mesin 02','Mesin 03'], qc: [], lokasiSortir: ['Area Produksi','Gudang','Area QC','Customer'], proses: ['Cutting','Forming','Welding','Assembly','Finishing','Final QC'] }; }
 
 /* TABS */
 document.querySelectorAll('.tab-btn').forEach(btn=>{
@@ -1193,19 +1216,30 @@ function populateSelect(sel, list, placeholder){
   if(list.includes(cur)) sel.value = cur;
 }
 
+/* Operator diketik manual; daftar saran = master + nama yang pernah diinput */
+function refreshOperatorOptions(){
+  const names = uniqSort(entries.map(e=>e.operator));
+  const dlp = document.getElementById('problemTypeList');
+  if(dlp) dlp.innerHTML = uniqSort(entries.map(e=>e.problemType)).map(n=>`<option value="${esc(n)}">`).join('');
+  const dl = document.getElementById('operatorList');
+  if(dl) dl.innerHTML = names.map(n=>`<option value="${esc(n)}">`).join('');
+  const fo = document.getElementById('filt-operator');
+  if(fo) populateSelect(fo, names, 'Semua Operator');
+}
+
 function refreshFormSelects(){
   populateSelect(document.getElementById('f-machine'), master.mesin, '- Pilih mesin -');
-  populateSelect(document.getElementById('f-operator'), master.operator, '- Pilih operator -');
   populateSelect(document.getElementById('f-qc'), master.qc, '- Pilih QC -');
-  populateSelect(document.getElementById('f-problemtype'), master.jenisProblem, '- Pilih jenis problem -');
+  populateSelect(document.getElementById('f-sort-location'), master.lokasiSortir, '- Pilih lokasi sortir -');
   populateSelect(document.getElementById('f-process'), master.proses, '- Pilih proses -');
   populateSelect(document.getElementById('filt-machine'), master.mesin, 'Semua Mesin');
-  populateSelect(document.getElementById('filt-operator'), master.operator, 'Semua Operator');
+  refreshOperatorOptions();
   populateSelect(document.getElementById('filt-qc'), master.qc, 'Semua QC');
   syncProcessFromMachine();
 }
 
 function refreshProjectOptions(){
+  refreshOperatorOptions();
   const projectsFromEntries = entries.map(e => e.projectNumber);
   const projectsFromLogs = problemLogs.map(l => l.projectNumber);
   const projects = uniqSort([...projectsFromEntries, ...projectsFromLogs]);
@@ -1225,7 +1259,7 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   const submitBtn = document.getElementById('submitBtnMain'); const msg = document.getElementById('saveMsg');
   const isEdit = !!editingId; const entryId = isEdit ? editingId : uid();
   const fileProblem = document.getElementById('f-photo-problem').files[0]; const fileNc = document.getElementById('f-photo-nc').files[0];
-  const base = { date: document.getElementById('f-date').value, projectNumber: normStr(document.getElementById('f-project').value), shift: document.getElementById('f-shift').value, machine: document.getElementById('f-machine').value, operator: document.getElementById('f-operator').value, qc: document.getElementById('f-qc').value, problemType: document.getElementById('f-problemtype').value, process: processOfMachine(document.getElementById('f-machine').value) || document.getElementById('f-process').value, ncCount: document.getElementById('f-nc-count').value===''? null : Number(document.getElementById('f-nc-count').value), downtime: document.getElementById('f-downtime').value || '', desc: document.getElementById('f-desc').value.trim(), qtyProduction: document.getElementById('f-qty-production').value===''? null : Number(document.getElementById('f-qty-production').value), totalReject: document.getElementById('f-total-reject').value===''? null : Number(document.getElementById('f-total-reject').value) };
+  const base = { date: document.getElementById('f-date').value, projectNumber: normStr(document.getElementById('f-project').value), shift: document.getElementById('f-shift').value, machine: document.getElementById('f-machine').value, operator: normStr(document.getElementById('f-operator').value), qc: document.getElementById('f-qc').value, problemType: normStr(document.getElementById('f-problemtype').value), sortLocation: document.getElementById('f-sort-location').value, process: processOfMachine(document.getElementById('f-machine').value) || document.getElementById('f-process').value, ncCount: document.getElementById('f-nc-count').value===''? null : Number(document.getElementById('f-nc-count').value), downtime: document.getElementById('f-downtime').value || '', desc: document.getElementById('f-desc').value.trim(), qtyProduction: document.getElementById('f-qty-production').value===''? null : Number(document.getElementById('f-qty-production').value), totalReject: document.getElementById('f-total-reject').value===''? null : Number(document.getElementById('f-total-reject').value) };
   if(!base.machine || !base.operator || !base.qc || !base.problemType || !base.desc){ showToast('Lengkapi semua field wajib'); return; }
   const { qtyTotal, rejectPct } = calcRejectStats(base.qtyProduction, base.totalReject);
   base.qtyTotal = (base.qtyProduction==null && base.totalReject==null) ? null : qtyTotal;
@@ -1246,17 +1280,19 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
       if(number || photoUrl || note || status==='kelolosan') pallets.push({ number, photo: photoUrl, status, note });
     }
   }catch(err){ submitBtn.disabled = false; msg.textContent = ''; showToast('Gagal upload foto: '+err.message); return; }
-  const payload = { date: base.date, project_number: base.projectNumber, shift: base.shift, machine: base.machine, operator: base.operator, qc: base.qc, problem_type: base.problemType, process: base.process, nc_count: base.ncCount, downtime: base.downtime, description: base.desc, photo_problem_url: photoProblemUrl, photo_nc_url: photoNcUrl, pallets: pallets, qty_production: base.qtyProduction, total_reject: base.totalReject, qty_total: base.qtyTotal, reject_percentage: base.rejectPercentage };
-  let error;
-  if(isEdit){ ({ error } = await sb.from('problem_entries').update(payload).eq('id', entryId)); }
-  else { ({ error } = await sb.from('problem_entries').insert({ id: entryId, ...payload })); }
+  const payload = { date: base.date, project_number: base.projectNumber, shift: base.shift, machine: base.machine, operator: base.operator, qc: base.qc, problem_type: base.problemType, sort_location: base.sortLocation || null, process: base.process, nc_count: base.ncCount, downtime: base.downtime, description: base.desc, photo_problem_url: photoProblemUrl, photo_nc_url: photoNcUrl, pallets: pallets, qty_production: base.qtyProduction, total_reject: base.totalReject, qty_total: base.qtyTotal, reject_percentage: base.rejectPercentage };
+  const saveRow = ()=> isEdit ? sb.from('problem_entries').update(payload).eq('id', entryId) : sb.from('problem_entries').insert({ id: entryId, ...payload });
+  let { error } = await saveRow();
+  let columnMissing = false;
+  if(error && /sort_location/i.test(error.message||'')){ columnMissing = true; delete payload.sort_location; ({ error } = await saveRow()); }   // kolom belum dibuat: simpan tanpa lokasi sortir
   submitBtn.disabled = false;
   if(error){ msg.textContent=''; showToast('Gagal menyimpan: '+error.message); return; }
   if(filesToDeleteAfterSuccess.length){ const paths = filesToDeleteAfterSuccess.map(pathFromPublicUrl).filter(Boolean); if(paths.length) sb.storage.from('problem-photos').remove(paths).catch(()=>{}); }
-  const localEntry = { id: entryId, date: base.date, projectNumber: base.projectNumber, shift: base.shift, machine: base.machine, operator: base.operator, qc: base.qc, problemType: base.problemType, process: base.process, ncCount: base.ncCount, downtime: base.downtime, desc: base.desc, photoProblem: photoProblemUrl, photoNc: photoNcUrl, pallets: pallets, qtyProduction: base.qtyProduction, totalReject: base.totalReject, qtyTotal: base.qtyTotal, rejectPercentage: base.rejectPercentage };
+  const localEntry = { id: entryId, date: base.date, projectNumber: base.projectNumber, shift: base.shift, machine: base.machine, operator: base.operator, qc: base.qc, problemType: base.problemType, sortLocation: base.sortLocation, process: base.process, ncCount: base.ncCount, downtime: base.downtime, desc: base.desc, photoProblem: photoProblemUrl, photoNc: photoNcUrl, pallets: pallets, qtyProduction: base.qtyProduction, totalReject: base.totalReject, qtyTotal: base.qtyTotal, rejectPercentage: base.rejectPercentage };
   if(isEdit){ const idx = entries.findIndex(x=>x.id===entryId); if(idx!==-1) entries[idx] = localEntry; resetFormToBlank(); showToast('Perubahan tersimpan'); }
   else { entries.push(localEntry); resetFormToBlank(); msg.style.color = 'var(--green)'; msg.textContent = 'Tersimpan ✓'; setTimeout(()=>msg.textContent='', 1800); }
   renderTodayList(); renderAll(); renderGallery(); renderDataTable(); renderMonitor();
+  if(columnMissing) setTimeout(()=>showToast('⚠ Lokasi Sortir belum tersimpan: buat kolom sort_location di Supabase (lihat petunjuk SQL)'), 500);
 });
 
 function renderTodayList(){
@@ -1344,6 +1380,9 @@ function startEdit(entry){
   document.getElementById('f-machine').value = entry.machine || '';
   document.getElementById('f-operator').value = entry.operator || '';
   document.getElementById('f-qc').value = entry.qc || '';
+  (function(){ const sel = document.getElementById('f-sort-location'), v = entry.sortLocation || '';
+    if(v && ![...sel.options].some(o=>o.value===v)){ const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); }
+    sel.value = v; })();
   document.getElementById('f-problemtype').value = entry.problemType || '';
   document.getElementById('f-process').value = entry.process || ''; syncProcessFromMachine();
   document.getElementById('f-nc-count').value = entry.ncCount!=null ? entry.ncCount : '';
@@ -1451,6 +1490,13 @@ const LB = (()=>{
   return { open, close };
 })();
 function openLightbox(url){ LB.open(url); }
+/* Status deteksi untuk Top 10 Hot List: Kelolosan / Ditemukan (dari status palet) */
+function hotDetect(e){
+  const pl = e.pallets || [];
+  if(!pl.length) return '<span class="hot-badge none">Status –</span>';
+  const k = pl.filter(p=>p.status==='kelolosan').length, d = pl.length - k, multi = pl.length > 1;
+  return (k ? `<span class="hot-badge kel">⚠ Kelolosan${multi?' ×'+k:''}</span>` : '') + (d ? `<span class="hot-badge dit">✓ Ditemukan${multi?' ×'+d:''}</span>` : '');
+}
 /* Pratinjau foto yang baru dipilih (form Input Harian, Foto Palet, Problem Log) juga bisa diperbesar */
 document.addEventListener('click', e=>{
   const img = e.target.closest && e.target.closest('img.photo-preview.show, .pl-thumb img');
@@ -1637,7 +1683,7 @@ function renderHotlistReject(wk){
     const fire = rank===1 ? '🔥🔥🔥' : rank===2 ? '🔥🔥' : rank===3 ? '🔥' : '';
     const ph = (url,label)=> `<div class="hot-photo">${url ? `<img class="hot-thumb" src="${esc(url)}" data-lightbox="${esc(url)}" alt="Foto ${label}" title="Foto ${label} (klik untuk perbesar)" loading="lazy">` : `<div class="hot-thumb hot-thumb-empty">–</div>`}<span>${label}</span></div>`;
     const thumb = `<div class="hot-thumbs">${ph(e.photoProblem,'Problem')}${ph(e.photoNc,'NC')}</div>`;
-    return `<div class="hot-row ${rankCls}" ${rowStyle}><div class="hot-rank">#${rank}</div>${thumb}<div class="hot-info"><div class="hot-name">${esc(e.machine)} · ${esc(e.problemType)} ${fire?'<span class="hot-fire">'+fire+'</span>':''}</div><div class="hot-sub">${esc(e.date)}${e.projectNumber?' · '+esc(e.projectNumber):''}</div><div class="hot-qc">👤 QC: ${esc(e.qc||'-')}</div><div class="hot-bar-wrap"><div class="hot-bar" style="width:${barPct}%;${rank>3?`background:${rankColor};`:''}"></div></div></div><div class="hot-stats"><div class="hot-reject">${r.pct.toFixed(2)}%</div><div class="hot-pct">${e.totalReject.toLocaleString('id-ID')} / ${e.qtyProduction.toLocaleString('id-ID')} unit</div></div></div>`;
+    return `<div class="hot-row ${rankCls}" ${rowStyle}><div class="hot-rank">#${rank}</div>${thumb}<div class="hot-info"><div class="hot-name">${esc(e.machine)} · ${esc(e.problemType)} ${fire?'<span class="hot-fire">'+fire+'</span>':''}</div><div class="hot-sub">${esc(e.date)}${e.projectNumber?' · '+esc(e.projectNumber):''}</div><div class="hot-qcrow"><span class="hot-qc">👤 QC: ${esc(e.qc||'-')}</span>${hotDetect(e)}</div><div class="hot-bar-wrap"><div class="hot-bar" style="width:${barPct}%;${rank>3?`background:${rankColor};`:''}"></div></div></div><div class="hot-stats"><div class="hot-reject">${r.pct.toFixed(2)}%</div><div class="hot-pct">${e.totalReject.toLocaleString('id-ID')} / ${e.qtyProduction.toLocaleString('id-ID')} unit</div></div></div>`;
   }).join('');
   bindLightboxTriggers(box);
 }
@@ -1669,12 +1715,12 @@ function getFilteredEntries(){
 function renderDataTable(){
   const list = getFilteredEntries();
   const tbody = document.getElementById('dataTableBody');
-  if(list.length===0){ tbody.innerHTML = '<tr><td colspan="16" class="empty">Tidak ada data yang cocok.</td></tr>'; return; }
+  if(list.length===0){ tbody.innerHTML = '<tr><td colspan="17" class="empty">Tidak ada data yang cocok.</td></tr>'; return; }
   tbody.innerHTML = list.map(e=>{
     const pct = entryRejectPct(e); const isHigh = pct!=null && pct>3.5;
     const palletPhotos = (e.pallets||[]).filter(p=>p.photo);
     const photoThumbs = [ e.photoProblem ? `<img class="table-thumb" src="${esc(e.photoProblem)}" data-lightbox="${esc(e.photoProblem)}" title="Foto Problem" alt="Foto Problem">` : '', e.photoNc ? `<img class="table-thumb" src="${esc(e.photoNc)}" data-lightbox="${esc(e.photoNc)}" title="Foto NC" alt="Foto NC">` : '', palletPhotos.length ? `<img class="table-thumb" src="${esc(palletPhotos[0].photo)}" data-lightbox="${esc(palletPhotos[0].photo)}" title="Foto Label Palet" alt="Foto Label Palet">` : '' ].filter(Boolean).join('');
-    return `<tr class="${isHigh?'high-reject':''}"><td class="mono">${esc(e.date)}</td><td class="mono">${esc(e.projectNumber||'-')}</td><td>${esc(e.shift||'-')}</td><td><span class="mtag" style="color:${colorForName(e.machine)};">${esc(e.machine)}</span></td><td class="mono">${(e.pallets&&e.pallets.length) ? esc(e.pallets.map(p=>p.number||'-').join(', ')) : '-'}${entryHasKelolosan(e)?' <span class="note-flag">⚠ Kelolosan QC</span>':''}</td><td>${esc(e.operator)}</td><td>${esc(e.qc)}</td><td>${esc(e.problemType)}</td><td class="desc-cell">${esc(e.desc)}</td><td class="mono">${e.qtyProduction!=null?e.qtyProduction.toLocaleString('id-ID'):'-'}</td><td class="mono reject-cell">${e.totalReject!=null?e.totalReject.toLocaleString('id-ID'):'-'}</td><td class="mono">${e.qtyTotal!=null?e.qtyTotal.toLocaleString('id-ID'):'-'}</td><td class="mono pct-cell">${pct!=null?pct.toFixed(2)+'%':'-'}</td><td class="mono">${e.downtime?esc(e.downtime)+' mnt':'-'}</td><td><div class="table-photos">${photoThumbs || '<span class="table-thumb-empty">-</span>'}</div></td><td style="white-space:nowrap;"><button class="btn ghost small" data-edit2="${e.id}">Edit</button><button class="btn danger small" data-del2="${e.id}">Hapus</button></td></tr>`;
+    return `<tr class="${isHigh?'high-reject':''}"><td class="mono">${esc(e.date)}</td><td class="mono">${esc(e.projectNumber||'-')}</td><td>${esc(e.shift||'-')}</td><td><span class="mtag" style="color:${colorForName(e.machine)};">${esc(e.machine)}</span></td><td class="mono">${(e.pallets&&e.pallets.length) ? esc(e.pallets.map(p=>p.number||'-').join(', ')) : '-'}${entryHasKelolosan(e)?' <span class="note-flag">⚠ Kelolosan QC</span>':''}</td><td>${esc(e.operator)}</td><td>${esc(e.qc)}</td><td>${esc(e.problemType)}</td><td>${esc(e.sortLocation||'-')}</td><td class="desc-cell">${esc(e.desc)}</td><td class="mono">${e.qtyProduction!=null?e.qtyProduction.toLocaleString('id-ID'):'-'}</td><td class="mono reject-cell">${e.totalReject!=null?e.totalReject.toLocaleString('id-ID'):'-'}</td><td class="mono">${e.qtyTotal!=null?e.qtyTotal.toLocaleString('id-ID'):'-'}</td><td class="mono pct-cell">${pct!=null?pct.toFixed(2)+'%':'-'}</td><td class="mono">${e.downtime?esc(e.downtime)+' mnt':'-'}</td><td><div class="table-photos">${photoThumbs || '<span class="table-thumb-empty">-</span>'}</div></td><td style="white-space:nowrap;"><button class="btn ghost small" data-edit2="${e.id}">Edit</button><button class="btn danger small" data-del2="${e.id}">Hapus</button></td></tr>`;
   }).join('');
   const th = document.getElementById('th-pct'); th.innerHTML = '% Reject' + (dataSort.key==='pct' ? `<span class="arrow">${dataSort.dir===1?'▲':'▼'}</span>` : '');
   bindLightboxTriggers(tbody);
@@ -1686,8 +1732,8 @@ document.getElementById('th-pct').addEventListener('click', ()=>{ if(dataSort.ke
 document.getElementById('clearFilters').addEventListener('click', ()=>{ ['filt-from','filt-to','filt-project','filt-machine','filt-operator','filt-qc'].forEach(id=>document.getElementById(id).value=''); document.getElementById('filt-highreject').checked = false; dataSort = { key:null, dir:-1 }; renderDataTable(); });
 document.getElementById('exportCsv').addEventListener('click', ()=>{
   const list = getFilteredEntries().slice().sort((a,b)=>a.date.localeCompare(b.date));
-  const rows = [['Tanggal','Nomor Project','Shift','Mesin','Nomor Palet','Operator','QC','Jenis Problem','Deskripsi','Qty Production','Total Reject','Qty Total','% Reject','Downtime (menit)','Foto Problem','Foto NC','Foto Label Palet (semua)','Status Deteksi QC','Catatan Palet']];
-  list.forEach(e=>{ const pallets = e.pallets||[]; const palletNumbers = pallets.map(p=>p.number).filter(Boolean).join(' | '); const palletPhotos = pallets.map(p=>p.photo).filter(Boolean).join(' | '); const palletStatus = pallets.map(p=> (p.number||'-') + ': ' + (p.status==='kelolosan'?'Kelolosan':'Ditemukan')).join(' | '); const palletNotes = pallets.map(p=>p.note).filter(Boolean).join(' | '); rows.push([e.date,e.projectNumber,e.shift,e.machine,palletNumbers,e.operator,e.qc,e.problemType,e.desc,e.qtyProduction,e.totalReject,e.qtyTotal,e.rejectPercentage!=null?e.rejectPercentage.toFixed(2)+'%':'',e.downtime,e.photoProblem,e.photoNc,palletPhotos,palletStatus,palletNotes]); });
+  const rows = [['Tanggal','Nomor Project','Shift','Mesin','Nomor Palet','Operator','QC','Jenis Problem','Deskripsi','Qty Production','Total Reject','Qty Total','% Reject','Downtime (menit)','Foto Problem','Foto NC','Foto Label Palet (semua)','Status Deteksi QC','Catatan Palet','Lokasi Sortir']];
+  list.forEach(e=>{ const pallets = e.pallets||[]; const palletNumbers = pallets.map(p=>p.number).filter(Boolean).join(' | '); const palletPhotos = pallets.map(p=>p.photo).filter(Boolean).join(' | '); const palletStatus = pallets.map(p=> (p.number||'-') + ': ' + (p.status==='kelolosan'?'Kelolosan':'Ditemukan')).join(' | '); const palletNotes = pallets.map(p=>p.note).filter(Boolean).join(' | '); rows.push([e.date,e.projectNumber,e.shift,e.machine,palletNumbers,e.operator,e.qc,e.problemType,e.desc,e.qtyProduction,e.totalReject,e.qtyTotal,e.rejectPercentage!=null?e.rejectPercentage.toFixed(2)+'%':'',e.downtime,e.photoProblem,e.photoNc,palletPhotos,palletStatus,palletNotes,e.sortLocation||'']); });
   const csv = rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob = new Blob([csv],{type:'text/csv'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'data-problem-produksi.csv'; a.click(); URL.revokeObjectURL(url);
 });
@@ -1712,9 +1758,9 @@ document.getElementById('exportExcel').addEventListener('click', async ()=>{
   try{
     const wb = new ExcelJS.Workbook(); wb.creator = 'Panel Problem Produksi'; wb.created = new Date();
     const ws = wb.addWorksheet('Data Problem', { views:[{ state:'frozen', ySplit:1 }] });
-    const columnDefs = [ { name:'Tanggal', width:13 },{ name:'Nomor Project', width:16 },{ name:'Shift', width:10 },{ name:'Mesin', width:14 },{ name:'Nomor Palet', width:14 },{ name:'Operator', width:18 },{ name:'QC', width:18 },{ name:'Jenis Problem', width:22 },{ name:'Deskripsi', width:45 },{ name:'Qty Production', width:14 },{ name:'Total Reject', width:13 },{ name:'Qty Total', width:12 },{ name:'% Reject', width:11 },{ name:'Downtime (menit)', width:16 },{ name:'Foto Problem', width:16 },{ name:'Foto NC', width:16 },{ name:'Foto Label Palet', width:16 },{ name:'Status Deteksi QC', width:30 },{ name:'Catatan Palet', width:28 } ];
+    const columnDefs = [ { name:'Tanggal', width:13 },{ name:'Nomor Project', width:16 },{ name:'Shift', width:10 },{ name:'Mesin', width:14 },{ name:'Nomor Palet', width:14 },{ name:'Operator', width:18 },{ name:'QC', width:18 },{ name:'Jenis Problem', width:22 },{ name:'Deskripsi', width:45 },{ name:'Qty Production', width:14 },{ name:'Total Reject', width:13 },{ name:'Qty Total', width:12 },{ name:'% Reject', width:11 },{ name:'Downtime (menit)', width:16 },{ name:'Foto Problem', width:16 },{ name:'Foto NC', width:16 },{ name:'Foto Label Palet', width:16 },{ name:'Status Deteksi QC', width:30 },{ name:'Catatan Palet', width:28 },{ name:'Lokasi Sortir', width:20 } ];
     ws.columns = columnDefs.map(c=>({ width:c.width }));
-    const rows = list.map(e=>{ const pallets = e.pallets||[]; const palletNumbers = pallets.map(p=>p.number).filter(Boolean).join(', ') || '-'; const palletStatus = pallets.map(p=> (p.number||'-') + ': ' + (p.status==='kelolosan'?'Kelolosan':'Ditemukan')).join(' | ') || ''; const palletNotes = pallets.map(p=>p.note).filter(Boolean).join(' | ') || ''; return [ e.date, e.projectNumber||'-', e.shift||'-', e.machine, palletNumbers, e.operator, e.qc, e.problemType, e.desc, e.qtyProduction!=null ? e.qtyProduction : null, e.totalReject!=null ? e.totalReject : null, e.qtyTotal!=null ? e.qtyTotal : null, e.rejectPercentage!=null ? Number(e.rejectPercentage.toFixed(2)) : null, e.downtime ? Number(e.downtime) : null, '', '', '', palletStatus, palletNotes ]; });
+    const rows = list.map(e=>{ const pallets = e.pallets||[]; const palletNumbers = pallets.map(p=>p.number).filter(Boolean).join(', ') || '-'; const palletStatus = pallets.map(p=> (p.number||'-') + ': ' + (p.status==='kelolosan'?'Kelolosan':'Ditemukan')).join(' | ') || ''; const palletNotes = pallets.map(p=>p.note).filter(Boolean).join(' | ') || ''; return [ e.date, e.projectNumber||'-', e.shift||'-', e.machine, palletNumbers, e.operator, e.qc, e.problemType, e.desc, e.qtyProduction!=null ? e.qtyProduction : null, e.totalReject!=null ? e.totalReject : null, e.qtyTotal!=null ? e.qtyTotal : null, e.rejectPercentage!=null ? Number(e.rejectPercentage.toFixed(2)) : null, e.downtime ? Number(e.downtime) : null, '', '', '', palletStatus, palletNotes, e.sortLocation||'' ]; });
     ws.addTable({ name: 'DataProblemProduksi', ref: 'A1', headerRow: true, totalsRow: false, style: { theme: 'TableStyleMedium9', showRowStripes: true }, columns: columnDefs.map(c=>({ name:c.name, filterButton:true })), rows: rows });
     ws.getRow(1).font = { bold:true, color:{ argb:'FFFFFFFF' } }; ws.getRow(1).alignment = { vertical:'middle' };
     ws.getColumn(9).alignment = { wrapText:true, vertical:'top' }; ws.getColumn(13).numFmt = '0.00"%"'; ws.getColumn(18).alignment = { wrapText:true, vertical:'top' }; ws.getColumn(19).alignment = { wrapText:true, vertical:'top' };
@@ -2968,7 +3014,7 @@ async function downloadMonitoringExcel(){
 
 /* MASTER DATA */
 function renderMasterLists(){
-  ['mesin','operator','qc','jenisProblem','proses'].forEach(cat=>{
+  ['mesin','qc','proses','lokasiSortir'].forEach(cat=>{
     const ul = document.getElementById('list-'+cat);
     if(master[cat].length===0){ ul.innerHTML = '<li style="justify-content:center;color:var(--text-dim);">Belum ada data</li>'; return; }
     ul.innerHTML = master[cat].map(v=>`<li>${esc(v)} <button data-rm="${cat}::${esc(v)}">✕</button></li>`).join('');
